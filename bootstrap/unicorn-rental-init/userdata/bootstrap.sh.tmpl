@@ -1,0 +1,35 @@
+dnf update -y
+dnf install -y java-21-amazon-corretto-devel curl
+mkdir -p {{APP_DIRECTORY}}
+cat > {{APP_DIRECTORY}}/UnicornRentalApp.java <<'EOF'
+{{JAVA_SOURCE}}
+EOF
+cat > /etc/{{SERVICE_NAME}}.env <<EOF
+PORT=8080
+AWS_REGION={{AWS_REGION}}
+AWS_DEFAULT_REGION={{AWS_REGION}}
+TABLE_NAME={{TABLE_NAME}}
+EOF
+cat > /etc/systemd/system/{{SERVICE_NAME}}.service <<'EOF'
+[Unit]
+Description=Unicorn Rental bootstrap Java workload
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory={{APP_DIRECTORY}}
+EnvironmentFile=/etc/{{SERVICE_NAME}}.env
+ExecStart=/usr/bin/java --add-modules jdk.httpserver {{APP_DIRECTORY}}/UnicornRentalApp.java
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+chown -R ec2-user:ec2-user /opt/{{PROJECT_NAME}}
+chmod 600 /etc/{{SERVICE_NAME}}.env
+systemctl daemon-reload
+systemctl enable {{SERVICE_NAME}}.service
+systemctl start {{SERVICE_NAME}}.service

@@ -1,0 +1,19 @@
+{
+  "name": "unicorn-rental-init-bootstrap",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "synth": "npm run build && node dist/bin/unicorn-rental-init.js"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.243.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
+

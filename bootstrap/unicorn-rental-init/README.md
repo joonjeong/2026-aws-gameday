@@ -1,148 +1,84 @@
 # Unicorn Rental Init Bootstrap
 
-GameDay 시작 직전의 기준 인프라를 생성하는 CDK 앱이다.
+`bootstrap/unicorn-rental-init` 는 Unicorn Rental bootstrap 환경의 현재 기준 인프라를 생성하는 AWS CDK 앱이다.
 
-## 배경 및 목적
+이 문서는 현재 버전만 다룬다.
 
-- 실제 GameDay 상황과 유사하게 운영 환경의 거친 느낌을 재현한다.
-- 잘 정리된 이상적 레퍼런스 아키텍처보다, 급하게 만들어져 "일단 돌아가는" 운영 환경에 가깝게 시작한다.
-- 이후 `solution/` 에서 이 거친 초기 상태를 더 안전하고 운영 가능한 구조로 전환하는 과정을 실험한다.
+## 현재 구조
 
-## 운영 환경의 거친 느낌에서 오는 제약사항
-
-- 일단 돌아가는 솔루션을 우선한 상태다.
-- AWS Well-Architected Framework 와는 상당한 거리가 있는 상태다.
-- 지속적인 유지보수성, 운영 취약점, 보안 강도는 충분히 고려되지 않은 상태다.
-- public subnet 기반 EC2, 직접 SSH 접근, 단순한 실행 방식 등은 의도된 bootstrap 제약이다.
-- 이 문서의 bootstrap 환경은 "좋은 최종 상태"가 아니라, 전환과 개선의 출발점이다.
-
-## 비목표
-
-- production-ready 아키텍처 제공
-- 최소권한 보안 모델 완성
-- 장기 운영에 적합한 네트워크 분리/비밀관리/배포 체계 완성
-- 장애 격리, 비용 최적화, 운영 자동화가 충분히 반영된 상태 제공
-
-즉, 이 bootstrap은 일부러 거칠고 불완전해야 한다. 그래야 GameDay 중 drift, 수동 변경, 긴급 대응, 구조 개선의 실용성을 체감할 수 있다.
-
-## 목적
-
-- 기존 운영 환경과 격리된 신규 VPC를 만든다.
-- ALB + ASG + EC2 + DynamoDB 형태의 시작 상태를 재현한다.
-- CloudFormation drift를 관찰할 수 있는 기준 스냅샷을 만든다.
-- 비용을 고려해 `Network` 를 먼저 배포하고, `Application` 은 실습 시점에만 따로 배포할 수 있게 한다.
-- bootstrap 네트워크는 NAT Gateway와 EIP 없이 유지하고, EC2는 public subnet에서 동적 public IP를 사용한다.
-
-부트스트랩 단계 의도:
-
-- 앱 EC2는 public subnet에 둔다.
-- SSH key와 public 접근 경로를 열어 둔다.
-- bootstrap 단계에서는 app subnet 자체를 만들지 않는다.
-- 이후 `solution/` 쪽 전환 작업에서 private subnet 기반 구조를 새로 도입하게 한다.
+- `UnicornRentalNetworkStack`: dedicated VPC, public subnet only
+- `UnicornRentalApplicationStack`: ALB, target group, Auto Scaling Group, LaunchTemplate, EC2, DynamoDB, instance role, EC2 key pair
+- ALB는 `80` 포트로 들어오고 앱 인스턴스는 `8080` 포트로 응답한다
+- 앱 인스턴스는 public subnet에서 동적 public IP를 받고 SSH `22` 포트가 열려 있다
+- NAT Gateway와 Elastic IP는 없다
+- SSH private key material은 CloudFormation output이 아니라 SSM Parameter Store에 저장된다
+- 각 인스턴스는 부팅 시 CDK assets S3 bucket에서 앱 소스, 환경파일, `systemd` 유닛, bootstrap script를 내려받고, `awscli` 와 Java를 설치한 뒤 컴파일과 서비스 기동을 수행한다
 
 ## 아키텍처
 
 ```text
-                                Internet
-                                    |
-        +---------------------------------------------------------------+
-        | CDK App: bootstrap/unicorn-rental-init                        |
-        |                                                               |
-        |  +---------------------------------------------------------+  |
-        |  | Stack 1: UnicornRentalNetworkStack                      |  |
-        |  |                                                         |  |
-        |  |  Dedicated GameDay VPC                                  |  |
-        |  |  - Public subnets only                                  |  |
-        |  +---------------------------+-----------------------------+  |
-        |                              |                                |
-        |                              v                                |
-        |  +---------------------------------------------------------+  |
-        |  | Stack 2: UnicornRentalApplicationStack                  |  |
-        |  | deployed later only when needed                         |  |
-        |  |                                                         |  |
-        |  |  - ALB security group                                   |  |
-        |  |  - App security group                                   |  |
-        |  |  +-------------------+                                  |  |
-        |  |  | Public ALB        | <--------- HTTP:80 ------------- |  |
-        |  |  +---------+---------+                                  |  |
-        |  |            | HTTP:8080                                  |  |
-        |  |            v                                            |  |
-        |  |  +-------------------+                                  |  |
-        |  |  | Target Group      |                                  |  |
-        |  |  +---------+---------+                                  |  |
-        |  |            |                                            |  |
-        |  |            v                                            |  |
-        |  |  +-------------------+                                  |  |
-        |  |  | Auto Scaling Group|                                  |  |
-        |  |  | unicorn-rental-asg|                                  |  |
-        |  |  +---------+---------+                                  |  |
-        |  |            |                                            |  |
-        |  |     +------+------+                                     |  |
-        |  |     |             |                                     |  |
-        |  |     v             v                                     |  |
-        |  |  +--------+   +--------+                                |  |
-        |  |  | EC2 #1 |   | EC2 #2 | <----- SSH:22 ---------------  |  |
-        |  |  | Java   |   | Java   |                                |  |
-        |  |  | DDB CLI|   | DDB CLI|                                |  |
-        |  |  +--------+   +--------+                                |  |
-        |  |                                                         |  |
-        |  |  +----------------------+                               |  |
-        |  |  | DynamoDB Table       |                               |  |
-        |  |  | unicorn-rental-orders|                               |  |
-        |  |  | - rentals            |                               |  |
-        |  |  | - orders             |                               |  |
-        |  |  +----------------------+                               |  |
-        |  +---------------------------------------------------------+  |
-        +---------------------------------------------------------------+
-
-Bootstrap intent:
-- Deploy low-cost `Network` first
-- Deploy costful `Application` only when the exercise starts
-- Start from public-subnet EC2 with direct SSH access
-- Keep the bootstrap topology to public subnets only
-- Keep the bootstrap VPC free of NAT Gateway and Elastic IP allocation
-- Observe drift/manual changes in a more legacy-like topology
-- Introduce private-subnet application placement later via solution/
-- Treat bootstrap as intentionally rough, not as a recommended final design
+                                 Internet
+                                     |
+                                 HTTP :80
+                                     v
+                      +-------------------------------+
+                      | Application Load Balancer     |
+                      +---------------+---------------+
+                                      |
+                                  HTTP :8080
+                                      v
+      +-------------------------------------------------------------------+
+      | Dedicated VPC                                                      |
+      | public subnets only, no NAT Gateway, no Elastic IP                 |
+      |                                                                   |
+      |  +---------------------------+                                    |
+      |  | Auto Scaling Group        |                                    |
+      |  | LaunchTemplate-backed EC2 |                                    |
+      |  +-------------+-------------+                                    |
+      |                |                                                  |
+      |        +-------+--------+                                         |
+      |        |                |                                         |
+      |    +---v----+      +----v---+      +---------------------------+  |
+      |    | EC2 #1 |      | EC2 #2 |----->| DynamoDB                  |  |
+      |    | app    |      | app    |      | unicorn-rental-orders     |  |
+      |    +---+----+      +----+---+      +---------------------------+  |
+      |        ^                ^                                         |
+      |        | SSH :22        |                                         |
+      +--------+----------------+-----------------------------------------+
+               |                |
+               |                +-----------------------------------+
+               |                                                    |
+      +--------v---------+                               +-----------v-----------+
+      | SSM Parameter    |                               | CDK assets S3 bucket  |
+      | Store            |                               | - UnicornRentalApp    |
+      | - EC2 private key|                               | - service.env         |
+      +------------------+                               | - service.service     |
+                                                         | - bootstrap.sh        |
+                                                         +-----------+-----------+
+                                                                          |
+                                                                      aws s3 cp
+                                                                          v
+                                                           /opt/<projectName>/app
+                                                           systemd: <projectName>
 ```
 
-첫 배포 절차는 [initial-deploy.md](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-init/docs/initial-deploy.md) 에 정리했다.
+## 스택 요약
 
-## 스택 구성
+- `UnicornRentalNetworkStack`: dedicated VPC, public subnets
+- `UnicornRentalApplicationStack`: security groups, EC2 instance role, EC2 key pair, LaunchTemplate, Auto Scaling Group, Application Load Balancer, target group, DynamoDB table
 
-- `UnicornRentalNetworkStack`: VPC, public subnet
-- `UnicornRentalApplicationStack`: security group, EC2 instance role, DynamoDB, SSH key pair, ALB, target group, ASG, app EC2
-
-순차 배포 의도:
-
-1. `UnicornRentalNetworkStack`
-2. 실제 실습 시점에만 `UnicornRentalApplicationStack`
-
-## 삭제 영향
-
-- 이제 bootstrap 앱은 별도 operator IAM user, access key, CloudFormation execution role을 생성하지 않는다.
-- 기존 환경에 `UnicornRentalAccessStack` 이 이미 배포돼 있다면, 코드 제거 후에도 자동으로 사라지지 않으므로 별도 `destroy` 가 필요하다.
-- 남는 배포 단위는 `Network` 와 `Application` 두 스택이다.
-
-기존 Access 스택 정리:
-
-```bash
-npx cdk destroy UnicornRentalAccessStack --force
-```
-
-## 명령
+## 기본 명령
 
 ```bash
 npm install
 npm run build
+npm test
 npm run synth
 ```
 
-## 설정 파일
+## 설정
 
-배포 설정값은 CloudFormation parameter가 아니라 CDK app context로 읽는다.
-
-반복해서 쓰는 값은 [cdk.json](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-init/cdk.json) 의 `context` 에 넣어 파일로 관리할 수 있다.
+설정값은 [cdk.json](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-init/cdk.json) 의 `context` 에 둔다.
 
 ```json
 {
@@ -159,41 +95,8 @@ npm run synth
 }
 ```
 
-`resourcePrefix` 는 선택값이다. 비워두면 기존 이름을 유지하고, 예를 들어 `gameday-a` 를 넣으면 `gameday-a-unicorn-rental-alb`, `gameday-a-unicorn-rental-orders`, `gameday-a-UnicornRentalNetworkStack` 같은 이름으로 생성된다.
+- `resourcePrefix`: 선택값. 비워두면 기본 이름을 쓴다
+- `projectName`: 리소스 이름, 앱 디렉터리, `systemd` 서비스 이름의 기준값이다
+- `healthCheckPath`: ALB target group health check 경로다
 
-이렇게 두면 `npx cdk deploy ...` 실행 시 긴 `-c` 목록을 반복하지 않아도 된다. 일회성 override가 필요하면 CLI의 `-c key=value`가 파일 값보다 우선한다.
-
-## User Data 분리
-
-- EC2 초기화 shell 템플릿: `userdata/bootstrap.sh.tmpl`
-- placeholder Java 소스: `userdata/UnicornRentalApp.java`
-
-CDK 스택은 위 파일을 읽어 placeholder를 치환한 뒤 user data로 주입한다. 따라서 긴 shell/java 블록을 TypeScript 안에 하드코딩하지 않아도 된다.
-
-현재 Java 앱은 다음 동작을 한다.
-
-- `/actuator/health`: DynamoDB `DescribeTable` 기반 상태 확인
-- `/api/rentals`: DynamoDB `Query` 기반 목록 조회
-- `/api/rentals/reserve`: DynamoDB `UpdateItem` 기반 예약
-- `/api/rentals/return`: DynamoDB `UpdateItem` 기반 반납
-- `/api/orders`: DynamoDB `Query` 기반 주문 목록 조회
-- `/api/orders/create`: 주문 생성 + 대여 자산 예약
-- `/api/orders/cancel`: 주문 취소 + 대여 자산 반납
-- `/api/rentals/maintenance/complete`: 정비 완료 후 자산 가용 상태 복구
-
-의존성 없는 source-file 실행을 유지하기 위해 AWS SDK 대신 AL2023 기본 제공 AWS CLI v2를 Java 프로세스에서 호출한다.
-
-## 코드 구조
-
-- `bin/unicorn-rental-init.ts`: 다중 스택 CDK 앱 엔트리
-- `lib/stacks/unicorn-rental-network-stack.ts`: 네트워크 스택
-- `lib/stacks/unicorn-rental-application-stack.ts`: 애플리케이션 스택
-- `lib/bootstrap/network.ts`: VPC, public subnet
-- `lib/bootstrap/application.ts`: security group, DynamoDB, SSH key pair, user data, ASG, ALB, target group
-- `lib/bootstrap/settings.ts`: app context 기반 설정 로드
-- `lib/bootstrap/user-data.ts`: 외부 user data 자산 로드 및 템플릿 치환
-
-주의:
-
-- 디렉터리는 하나지만 CloudFormation 스택은 분리되어 있다.
-- 비용 절감을 위해 application 리소스만 나중에 배포할 수 있다.
+배포, 출력값 확인, SSH 접속 절차는 [initial-deploy.md](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-init/docs/initial-deploy.md) 에 정리했다.

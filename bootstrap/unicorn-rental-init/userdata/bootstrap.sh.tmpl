@@ -1,38 +1,41 @@
 #!/bin/bash
 set -euo pipefail
 
-dnf update -y
-dnf install -y java-21-amazon-corretto-devel curl
-mkdir -p {{APP_DIRECTORY}}
-cat > {{APP_DIRECTORY}}/UnicornRentalApp.java <<'EOF'
-{{JAVA_SOURCE}}
-EOF
-cat > /etc/{{SERVICE_NAME}}.env <<EOF
-PORT=8080
-AWS_REGION={{AWS_REGION}}
-AWS_DEFAULT_REGION={{AWS_REGION}}
-TABLE_NAME={{TABLE_NAME}}
-EOF
-cat > /etc/systemd/system/{{SERVICE_NAME}}.service <<'EOF'
-[Unit]
-Description=Unicorn Rental bootstrap Java workload
-After=network.target
+exec > >(tee /var/log/{{SERVICE_NAME}}-bootstrap.log) 2>&1
+trap 'status=$?; echo "bootstrap failed for {{SERVICE_NAME}} with exit ${status}"; journalctl -u {{SERVICE_NAME}}.service --no-pager -n 100 || true; exit ${status}' ERR
 
-[Service]
-Type=simple
-User=ec2-user
-Group=ec2-user
-WorkingDirectory={{APP_DIRECTORY}}
-EnvironmentFile=/etc/{{SERVICE_NAME}}.env
-ExecStart=/usr/bin/java --add-modules jdk.httpserver {{APP_DIRECTORY}}/UnicornRentalApp.java
-Restart=always
-RestartSec=5
+dnf install -y awscli java-21-amazon-corretto-devel
 
-[Install]
-WantedBy=multi-user.target
-EOF
-chown -R ec2-user:ec2-user /opt/{{PROJECT_NAME}}
-chmod 600 /etc/{{SERVICE_NAME}}.env
+install -d -o ec2-user -g ec2-user {{APP_DIRECTORY}}
+
+for required_file in \
+  "{{APP_SOURCE_PATH}}" \
+  "{{ENV_FILE_PATH}}" \
+  "{{SERVICE_UNIT_PATH}}"
+do
+  test -s "${required_file}"
+done
+
+command -v aws
+aws --version
+chmod 600 {{ENV_FILE_PATH}}
+chmod 644 {{SERVICE_UNIT_PATH}}
+chown ec2-user:ec2-user {{APP_SOURCE_PATH}}
+
+javac --add-modules jdk.httpserver -d {{APP_DIRECTORY}} {{APP_SOURCE_PATH}}
+chown -R ec2-user:ec2-user {{APP_DIRECTORY}}
+
 systemctl daemon-reload
-systemctl enable {{SERVICE_NAME}}.service
-systemctl start {{SERVICE_NAME}}.service
+systemctl enable --now {{SERVICE_NAME}}.service
+
+for attempt in $(seq 1 15); do
+  if systemctl is-active --quiet {{SERVICE_NAME}}.service; then
+    echo "{{SERVICE_NAME}}.service is active"
+    exit 0
+  fi
+  sleep 1
+done
+
+echo "{{SERVICE_NAME}}.service did not become active"
+journalctl -u {{SERVICE_NAME}}.service --no-pager -n 100 || true
+exit 1

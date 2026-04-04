@@ -10,7 +10,6 @@ interface BootstrapUserDataProps {
   appDirectory: string;
   awsRegion: string;
   instanceRole: iam.IGrantable;
-  projectName: string;
   serviceName: string;
   tableName: string;
 }
@@ -20,18 +19,59 @@ export function createBootstrapUserData(
   props: BootstrapUserDataProps,
 ): ec2.UserData {
   const userData = ec2.UserData.forLinux();
-  const javaSource = readUserDataAsset('UnicornRentalApp.java');
-  const bootstrapScript = renderTemplate(readUserDataAsset('bootstrap.sh.tmpl'), {
-    APP_DIRECTORY: props.appDirectory,
+  const appSourcePath = resolveUserDataAssetPath('UnicornRentalApp.java');
+  const appSourceLocalPath = `${props.appDirectory}/UnicornRentalApp.java`;
+  const envFileLocalPath = `/etc/${props.serviceName}.env`;
+  const serviceUnitLocalPath = `/etc/systemd/system/${props.serviceName}.service`;
+  const serviceEnvironment = renderTemplate(readUserDataAsset('service.env.tmpl'), {
     AWS_REGION: props.awsRegion,
-    JAVA_SOURCE: javaSource,
-    PROJECT_NAME: props.projectName,
-    SERVICE_NAME: props.serviceName,
     TABLE_NAME: props.tableName,
   });
-  const bootstrapScriptAsset = new s3assets.Asset(scope, 'BootstrapScriptAsset', {
-    path: writeBootstrapScriptAsset(bootstrapScript),
+  const serviceUnit = renderTemplate(readUserDataAsset('service.service.tmpl'), {
+    APP_DIRECTORY: props.appDirectory,
+    ENV_FILE_PATH: envFileLocalPath,
+  });
+  const bootstrapScript = renderTemplate(readUserDataAsset('bootstrap.sh.tmpl'), {
+    APP_DIRECTORY: props.appDirectory,
+    APP_SOURCE_PATH: appSourceLocalPath,
+    ENV_FILE_PATH: envFileLocalPath,
+    SERVICE_NAME: props.serviceName,
+    SERVICE_UNIT_PATH: serviceUnitLocalPath,
+  });
+  const appSourceAsset = new s3assets.Asset(scope, 'BootstrapApplicationSourceAsset', {
+    path: appSourcePath,
     readers: [props.instanceRole],
+  });
+  const serviceEnvironmentAsset = new s3assets.Asset(scope, 'BootstrapEnvironmentAsset', {
+    path: writeRenderedAsset('service.env', serviceEnvironment, 0o600),
+    readers: [props.instanceRole],
+  });
+  const serviceUnitAsset = new s3assets.Asset(scope, 'BootstrapServiceUnitAsset', {
+    path: writeRenderedAsset('service.service', serviceUnit, 0o644),
+    readers: [props.instanceRole],
+  });
+  const bootstrapScriptAsset = new s3assets.Asset(scope, 'BootstrapScriptAsset', {
+    path: writeRenderedAsset('bootstrap.sh', bootstrapScript, 0o755),
+    readers: [props.instanceRole],
+  });
+  userData.addCommands('set -euo pipefail');
+  userData.addS3DownloadCommand({
+    bucket: appSourceAsset.bucket,
+    bucketKey: appSourceAsset.s3ObjectKey,
+    localFile: appSourceLocalPath,
+    region: props.awsRegion,
+  });
+  userData.addS3DownloadCommand({
+    bucket: serviceEnvironmentAsset.bucket,
+    bucketKey: serviceEnvironmentAsset.s3ObjectKey,
+    localFile: envFileLocalPath,
+    region: props.awsRegion,
+  });
+  userData.addS3DownloadCommand({
+    bucket: serviceUnitAsset.bucket,
+    bucketKey: serviceUnitAsset.s3ObjectKey,
+    localFile: serviceUnitLocalPath,
+    region: props.awsRegion,
   });
   const localScriptPath = userData.addS3DownloadCommand({
     bucket: bootstrapScriptAsset.bucket,
@@ -47,10 +87,14 @@ export function createBootstrapUserData(
 }
 
 function readUserDataAsset(fileName: string): string {
+  return fs.readFileSync(resolveUserDataAssetPath(fileName), 'utf8');
+}
+
+function resolveUserDataAssetPath(fileName: string): string {
   for (const candidate of resolveUserDataRoots()) {
     const filePath = path.join(candidate, fileName);
     if (fs.existsSync(filePath)) {
-      return fs.readFileSync(filePath, 'utf8');
+      return filePath;
     }
   }
 
@@ -65,15 +109,15 @@ function resolveUserDataRoots(): string[] {
   ];
 }
 
-function writeBootstrapScriptAsset(bootstrapScript: string): string {
-  const scriptDirectory = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'unicorn-rental-bootstrap-script-'),
+function writeRenderedAsset(fileName: string, contents: string, mode: number): string {
+  const assetDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'unicorn-rental-bootstrap-asset-'),
   );
-  const scriptPath = path.join(scriptDirectory, 'bootstrap.sh');
-  fs.writeFileSync(scriptPath, bootstrapScript, {
-    mode: 0o755,
+  const assetPath = path.join(assetDirectory, fileName);
+  fs.writeFileSync(assetPath, contents, {
+    mode,
   });
-  return scriptPath;
+  return assetPath;
 }
 
 function renderTemplate(template: string, values: Record<string, string>): string {

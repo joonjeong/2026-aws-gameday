@@ -97,9 +97,8 @@ export function createBootstrapApplication(
     appDirectory,
     awsRegion: scope.region,
     instanceRole,
-    projectName: settings.projectName,
     serviceName,
-    tableName: table.tableName,
+    tableName,
   });
   const launchTemplate = new ec2.LaunchTemplate(scope, 'ApplicationLaunchTemplate', {
     associatePublicIpAddress: true,

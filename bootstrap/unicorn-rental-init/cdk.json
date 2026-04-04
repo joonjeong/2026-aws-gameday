@@ -1,8 +1,16 @@
 {
   "app": "npx ts-node --prefer-ts-exts bin/unicorn-rental-init.ts",
+  "context": {
+    "resourcePrefix": "",
+    "projectName": "unicorn-rental",
+    "instanceType": "t3.small",
+    "desiredCapacity": 2,
+    "minCapacity": 2,
+    "maxCapacity": 4,
+    "healthCheckPath": "/actuator/health"
+  },
   "watch": {
     "include": ["bin/**/*.ts", "lib/**/*.ts"],
     "exclude": ["README.md", "cdk*.json", "package*.json", "tsconfig.json", "node_modules", "dist"]
   }
 }
-

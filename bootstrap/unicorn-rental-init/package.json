@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test",
     "synth": "npm run build && node dist/bin/unicorn-rental-init.js"
   },
   "dependencies": {
@@ -16,4 +17,3 @@
     "typescript": "^5.8.3"
   }
 }
-

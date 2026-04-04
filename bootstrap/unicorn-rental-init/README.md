@@ -30,14 +30,15 @@ GameDay 시작 직전의 기준 인프라를 생성하는 CDK 앱이다.
 - 기존 운영 환경과 격리된 신규 VPC를 만든다.
 - ALB + ASG + EC2 + DynamoDB 형태의 시작 상태를 재현한다.
 - CloudFormation drift를 관찰할 수 있는 기준 스냅샷을 만든다.
-- 별도 IAM user를 발급하되, 그 사용자는 지정된 CloudFormation 실행 role을 통해서만 배포를 수행하게 한다.
-- 비용을 고려해 `Network` 와 `Access` 를 먼저 배포하고, `Application` 은 실습 시점에만 따로 배포할 수 있게 한다.
+- 비용을 고려해 `Network` 를 먼저 배포하고, `Application` 은 실습 시점에만 따로 배포할 수 있게 한다.
+- bootstrap 네트워크는 NAT Gateway와 EIP 없이 유지하고, EC2는 public subnet에서 동적 public IP를 사용한다.
 
 부트스트랩 단계 의도:
 
 - 앱 EC2는 public subnet에 둔다.
 - SSH key와 public 접근 경로를 열어 둔다.
-- 이후 `solution/` 쪽 전환 작업에서 private subnet 기반 구조로 옮겨가게 한다.
+- bootstrap 단계에서는 app subnet 자체를 만들지 않는다.
+- 이후 `solution/` 쪽 전환 작업에서 private subnet 기반 구조를 새로 도입하게 한다.
 
 ## 아키텍처
 
@@ -51,27 +52,16 @@ GameDay 시작 직전의 기준 인프라를 생성하는 CDK 앱이다.
         |  | Stack 1: UnicornRentalNetworkStack                      |  |
         |  |                                                         |  |
         |  |  Dedicated GameDay VPC                                  |  |
-        |  |  - Public subnets                                       |  |
-        |  |  - Private subnets                                      |  |
-        |  |  - ALB security group                                   |  |
-        |  |  - App security group                                   |  |
+        |  |  - Public subnets only                                  |  |
         |  +---------------------------+-----------------------------+  |
         |                              |                                |
         |                              v                                |
         |  +---------------------------------------------------------+  |
-        |  | Stack 2: UnicornRentalAccessStack                       |  |
-        |  |                                                         |  |
-        |  |  IAM operator user                                      |  |
-        |  |  + access key outputs                                   |  |
-        |  |  CloudFormation execution role                          |  |
-        |  |  - VPC/subnet scoped provisioning intent                |  |
-        |  +---------------------------+-----------------------------+  |
-        |                              |                                |
-        |                              v                                |
-        |  +---------------------------------------------------------+  |
-        |  | Stack 3: UnicornRentalApplicationStack                  |  |
+        |  | Stack 2: UnicornRentalApplicationStack                  |  |
         |  | deployed later only when needed                         |  |
         |  |                                                         |  |
+        |  |  - ALB security group                                   |  |
+        |  |  - App security group                                   |  |
         |  |  +-------------------+                                  |  |
         |  |  | Public ALB        | <--------- HTTP:80 ------------- |  |
         |  |  +---------+---------+                                  |  |
@@ -106,11 +96,13 @@ GameDay 시작 직전의 기준 인프라를 생성하는 CDK 앱이다.
         +---------------------------------------------------------------+
 
 Bootstrap intent:
-- Deploy low-cost `Network` and `Access` first
+- Deploy low-cost `Network` first
 - Deploy costful `Application` only when the exercise starts
 - Start from public-subnet EC2 with direct SSH access
+- Keep the bootstrap topology to public subnets only
+- Keep the bootstrap VPC free of NAT Gateway and Elastic IP allocation
 - Observe drift/manual changes in a more legacy-like topology
-- Migrate toward private-subnet application placement via solution/
+- Introduce private-subnet application placement later via solution/
 - Treat bootstrap as intentionally rough, not as a recommended final design
 ```
 
@@ -118,36 +110,25 @@ Bootstrap intent:
 
 ## 스택 구성
 
-- `UnicornRentalNetworkStack`: VPC, subnet, security group
-- `UnicornRentalAccessStack`: operator IAM user, access key, CloudFormation execution role
-- `UnicornRentalApplicationStack`: EC2 instance role, DynamoDB, SSH key pair, ALB, target group, ASG, app EC2
+- `UnicornRentalNetworkStack`: VPC, public subnet
+- `UnicornRentalApplicationStack`: security group, EC2 instance role, DynamoDB, SSH key pair, ALB, target group, ASG, app EC2
 
 순차 배포 의도:
 
 1. `UnicornRentalNetworkStack`
-2. `UnicornRentalAccessStack`
-3. 실제 실습 시점에만 `UnicornRentalApplicationStack`
+2. 실제 실습 시점에만 `UnicornRentalApplicationStack`
 
-## 권한 모델
+## 삭제 영향
 
-### IAM user
+- 이제 bootstrap 앱은 별도 operator IAM user, access key, CloudFormation execution role을 생성하지 않는다.
+- 기존 환경에 `UnicornRentalAccessStack` 이 이미 배포돼 있다면, 코드 제거 후에도 자동으로 사라지지 않으므로 별도 `destroy` 가 필요하다.
+- 남는 배포 단위는 `Network` 와 `Application` 두 스택이다.
 
-- `cloudformation:*` 계열의 스택 작업
-- 읽기 전용 조회 권한
-- 지정된 `CloudFormationExecutionRole` 에 대한 `iam:PassRole`
+기존 Access 스택 정리:
 
-직접 `ec2:RunInstances` 같은 생성 권한은 부여하지 않는다.
-
-### CloudFormationExecutionRole
-
-- 새로 만든 VPC와 그 하위 subnet 안에서만 EC2 / ALB / ASG 계열 리소스를 생성/수정하도록 제한
-- DynamoDB, CloudWatch, Logs, SSM 등 운영 보조 서비스는 실행 가능
-
-주의:
-
-- AWS IAM 조건 키는 서비스마다 지원 범위가 다르다.
-- 따라서 네트워크 경계가 있는 서비스는 VPC/subnet 조건으로 묶고, 그 외 서비스는 실행 role surface 자체를 좁히는 방식으로 제어했다.
-- 이후 `solution/` 의 CDK 스택을 이 사용자로 바로 배포하려면, 생성되는 IAM role 정책이나 CDK bootstrap 전략은 추가 정리가 필요할 수 있다.
+```bash
+npx cdk destroy UnicornRentalAccessStack --force
+```
 
 ## 명령
 
@@ -156,6 +137,31 @@ npm install
 npm run build
 npm run synth
 ```
+
+## 설정 파일
+
+배포 설정값은 CloudFormation parameter가 아니라 CDK app context로 읽는다.
+
+반복해서 쓰는 값은 [cdk.json](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-init/cdk.json) 의 `context` 에 넣어 파일로 관리할 수 있다.
+
+```json
+{
+  "app": "npx ts-node --prefer-ts-exts bin/unicorn-rental-init.ts",
+  "context": {
+    "resourcePrefix": "",
+    "projectName": "unicorn-rental",
+    "instanceType": "t3.small",
+    "desiredCapacity": 2,
+    "minCapacity": 2,
+    "maxCapacity": 4,
+    "healthCheckPath": "/actuator/health"
+  }
+}
+```
+
+`resourcePrefix` 는 선택값이다. 비워두면 기존 이름을 유지하고, 예를 들어 `gameday-a` 를 넣으면 `gameday-a-unicorn-rental-alb`, `gameday-a-unicorn-rental-orders`, `gameday-a-UnicornRentalNetworkStack` 같은 이름으로 생성된다.
+
+이렇게 두면 `npx cdk deploy ...` 실행 시 긴 `-c` 목록을 반복하지 않아도 된다. 일회성 override가 필요하면 CLI의 `-c key=value`가 파일 값보다 우선한다.
 
 ## User Data 분리
 
@@ -181,11 +187,9 @@ CDK 스택은 위 파일을 읽어 placeholder를 치환한 뒤 user data로 주
 
 - `bin/unicorn-rental-init.ts`: 다중 스택 CDK 앱 엔트리
 - `lib/stacks/unicorn-rental-network-stack.ts`: 네트워크 스택
-- `lib/stacks/unicorn-rental-access-stack.ts`: 접근 제어 스택
 - `lib/stacks/unicorn-rental-application-stack.ts`: 애플리케이션 스택
-- `lib/bootstrap/network.ts`: VPC, subnet, security group
-- `lib/bootstrap/application.ts`: DynamoDB, SSH key pair, user data, ASG, ALB, target group
-- `lib/bootstrap/operator-access.ts`: operator IAM user, access key, CloudFormation execution role
+- `lib/bootstrap/network.ts`: VPC, public subnet
+- `lib/bootstrap/application.ts`: security group, DynamoDB, SSH key pair, user data, ASG, ALB, target group
 - `lib/bootstrap/settings.ts`: app context 기반 설정 로드
 - `lib/bootstrap/user-data.ts`: 외부 user data 자산 로드 및 템플릿 치환
 

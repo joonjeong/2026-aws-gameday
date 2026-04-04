@@ -14,8 +14,8 @@ export class UnicornRentalNetworkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: UnicornRentalNetworkStackProps) {
     super(scope, id, props);
 
-    applyBootstrapTags(this, props.settings.projectName);
-    this.resources = createBootstrapNetwork(this, props.settings.projectName);
+    applyBootstrapTags(this, props.settings);
+    this.resources = createBootstrapNetwork(this, props.settings);
 
     new cdk.CfnOutput(this, 'VpcId', {
       value: this.resources.vpc.vpcId,
@@ -31,11 +31,5 @@ export class UnicornRentalNetworkStack extends cdk.Stack {
       value: this.resources.vpc.publicSubnets.map((subnet) => subnet.subnetId).join(','),
       description: 'Public subnet IDs in the isolated GameDay VPC',
     });
-
-    new cdk.CfnOutput(this, 'PrivateSubnetIds', {
-      value: this.resources.vpc.privateSubnets.map((subnet) => subnet.subnetId).join(','),
-      description: 'Private subnet IDs in the isolated GameDay VPC',
-    });
   }
 }
-

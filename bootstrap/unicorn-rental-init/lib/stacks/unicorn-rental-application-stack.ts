@@ -15,7 +15,7 @@ export class UnicornRentalApplicationStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: UnicornRentalApplicationStackProps) {
     super(scope, id, props);
 
-    applyBootstrapTags(this, props.settings.projectName);
+    applyBootstrapTags(this, props.settings);
     this.resources = createBootstrapApplication(
       this,
       props.settings,
@@ -55,11 +55,6 @@ export class UnicornRentalApplicationStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'Ec2PrivateKeyParameterName', {
       value: this.resources.keyPair.privateKey.parameterName,
       description: 'SSM parameter name that stores the generated EC2 private key material',
-    });
-
-    new cdk.CfnOutput(this, 'Ec2PrivateKeyMaterial', {
-      value: this.resources.keyPair.privateKey.stringValue,
-      description: 'Private key material for the EC2 key pair. Stored by EC2 in SSM Parameter Store.',
     });
   }
 }

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { loadBootstrapSettings } from '../lib/bootstrap/settings';
-import { UnicornRentalAccessStack } from '../lib/stacks/unicorn-rental-access-stack';
+import { buildStackName, loadBootstrapSettings } from '../lib/bootstrap/settings';
 import { UnicornRentalApplicationStack } from '../lib/stacks/unicorn-rental-application-stack';
 import { UnicornRentalNetworkStack } from '../lib/stacks/unicorn-rental-network-stack';
 
@@ -15,25 +14,16 @@ const env = {
 const networkStack = new UnicornRentalNetworkStack(app, 'UnicornRentalNetworkStack', {
   env,
   settings,
+  stackName: buildStackName(settings, 'UnicornRentalNetworkStack'),
   description: 'Dedicated GameDay VPC and network boundary',
-});
-
-const accessStack = new UnicornRentalAccessStack(app, 'UnicornRentalAccessStack', {
-  env,
-  network: networkStack.resources,
-  settings,
-  description: 'Restricted operator user and CloudFormation execution role',
 });
 
 const applicationStack = new UnicornRentalApplicationStack(app, 'UnicornRentalApplicationStack', {
   env,
   network: networkStack.resources,
   settings,
+  stackName: buildStackName(settings, 'UnicornRentalApplicationStack'),
   description: 'Costful application resources deployed only when needed',
 });
-applicationStack.addDependency(
-  accessStack,
-  'Deploy application resources after low-cost network and access scaffolding',
-);
 
 app.synth();

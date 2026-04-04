@@ -2,7 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import {
   BootstrapAccessResources,
-  BootstrapApplicationResources,
   BootstrapNetworkResources,
   BootstrapSettings,
 } from './types';
@@ -31,7 +30,6 @@ export function createBootstrapOperatorAccess(
   scope: cdk.Stack,
   settings: BootstrapSettings,
   network: BootstrapNetworkResources,
-  application: BootstrapApplicationResources,
 ): BootstrapAccessResources {
   const ec2InstanceArn = scope.formatArn({
     service: 'ec2',
@@ -241,7 +239,14 @@ export function createBootstrapOperatorAccess(
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
             actions: ['iam:PassRole'],
-            resources: [application.instanceRole.roleArn],
+            resources: [
+              scope.formatArn({
+                service: 'iam',
+                region: '',
+                resource: 'role',
+                resourceName: `${settings.projectName}-ec2-role`,
+              }),
+            ],
           }),
         ],
       }),

@@ -31,6 +31,7 @@ GameDay 시작 직전의 기준 인프라를 생성하는 CDK 앱이다.
 - ALB + ASG + EC2 + DynamoDB 형태의 시작 상태를 재현한다.
 - CloudFormation drift를 관찰할 수 있는 기준 스냅샷을 만든다.
 - 별도 IAM user를 발급하되, 그 사용자는 지정된 CloudFormation 실행 role을 통해서만 배포를 수행하게 한다.
+- 비용을 고려해 `Network` 와 `Access` 를 먼저 배포하고, `Application` 은 실습 시점에만 따로 배포할 수 있게 한다.
 
 부트스트랩 단계 의도:
 
@@ -43,62 +44,70 @@ GameDay 시작 직전의 기준 인프라를 생성하는 CDK 앱이다.
 ```text
                                 Internet
                                     |
-        +-------------------------------------------------------------+
-        | Dedicated GameDay VPC                                        |
-        |                                                             |
-        |  Public Subnets                                             |
-        |                                                             |
-        |  +-------------------+                                      |
-        |  | Public ALB        | <------------- HTTP:80 ------------- |
-        |  | unicorn-rental    |                                      |
-        |  +---------+---------+                                      |
-        |            | HTTP:8080                                      |
-        |            v                                                |
-        |  +-------------------+                                      |
-        |  | Target Group      |                                      |
-        |  +---------+---------+                                      |
-        |            |                                                |
-        |            v                                                |
-        |  +-------------------+                                      |
-        |  | Auto Scaling Group|                                      |
-        |  | unicorn-rental-asg|                                      |
-        |  +---------+---------+                                      |
-        |            |                                                |
-        |     +------+------+                                         |
-        |     |             |                                         |
-        |     v             v                                         |
-        |  +--------+   +--------+                                    |
-        |  | EC2 #1 |   | EC2 #2 | <--------- SSH:22 ---------------- |
-        |  | Java   |   | Java   |                                    |
-        |  | DDB CLI|   | DDB CLI|                                    |
-        |  +--------+   +--------+                                    |
-        |                                                             |
-        |                                                             |
-        |  Private Subnets                                            |
-        |  - reserved for later migration target in solution/         |
-        +-------------------------------------------------------------+
-                                    |
-                                    v
-                         +----------------------+
-                         | DynamoDB Table       |
-                         | unicorn-rental-orders|
-                         | - rentals            |
-                         | - orders             |
-                         +----------------------+
-
-                     +-------------------------------+
-                     | IAM operator user             |
-                     | + access key outputs          |
-                     | + passrole to CFN exec role   |
-                     +---------------+---------------+
-                                     |
-                                     v
-                     +-------------------------------+
-                     | CloudFormation execution role |
-                     | VPC/subnet scoped provisioning|
-                     +-------------------------------+
+        +---------------------------------------------------------------+
+        | CDK App: bootstrap/unicorn-rental-init                        |
+        |                                                               |
+        |  +---------------------------------------------------------+  |
+        |  | Stack 1: UnicornRentalNetworkStack                      |  |
+        |  |                                                         |  |
+        |  |  Dedicated GameDay VPC                                  |  |
+        |  |  - Public subnets                                       |  |
+        |  |  - Private subnets                                      |  |
+        |  |  - ALB security group                                   |  |
+        |  |  - App security group                                   |  |
+        |  +---------------------------+-----------------------------+  |
+        |                              |                                |
+        |                              v                                |
+        |  +---------------------------------------------------------+  |
+        |  | Stack 2: UnicornRentalAccessStack                       |  |
+        |  |                                                         |  |
+        |  |  IAM operator user                                      |  |
+        |  |  + access key outputs                                   |  |
+        |  |  CloudFormation execution role                          |  |
+        |  |  - VPC/subnet scoped provisioning intent                |  |
+        |  +---------------------------+-----------------------------+  |
+        |                              |                                |
+        |                              v                                |
+        |  +---------------------------------------------------------+  |
+        |  | Stack 3: UnicornRentalApplicationStack                  |  |
+        |  | deployed later only when needed                         |  |
+        |  |                                                         |  |
+        |  |  +-------------------+                                  |  |
+        |  |  | Public ALB        | <--------- HTTP:80 ------------- |  |
+        |  |  +---------+---------+                                  |  |
+        |  |            | HTTP:8080                                  |  |
+        |  |            v                                            |  |
+        |  |  +-------------------+                                  |  |
+        |  |  | Target Group      |                                  |  |
+        |  |  +---------+---------+                                  |  |
+        |  |            |                                            |  |
+        |  |            v                                            |  |
+        |  |  +-------------------+                                  |  |
+        |  |  | Auto Scaling Group|                                  |  |
+        |  |  | unicorn-rental-asg|                                  |  |
+        |  |  +---------+---------+                                  |  |
+        |  |            |                                            |  |
+        |  |     +------+------+                                     |  |
+        |  |     |             |                                     |  |
+        |  |     v             v                                     |  |
+        |  |  +--------+   +--------+                                |  |
+        |  |  | EC2 #1 |   | EC2 #2 | <----- SSH:22 ---------------  |  |
+        |  |  | Java   |   | Java   |                                |  |
+        |  |  | DDB CLI|   | DDB CLI|                                |  |
+        |  |  +--------+   +--------+                                |  |
+        |  |                                                         |  |
+        |  |  +----------------------+                               |  |
+        |  |  | DynamoDB Table       |                               |  |
+        |  |  | unicorn-rental-orders|                               |  |
+        |  |  | - rentals            |                               |  |
+        |  |  | - orders             |                               |  |
+        |  |  +----------------------+                               |  |
+        |  +---------------------------------------------------------+  |
+        +---------------------------------------------------------------+
 
 Bootstrap intent:
+- Deploy low-cost `Network` and `Access` first
+- Deploy costful `Application` only when the exercise starts
 - Start from public-subnet EC2 with direct SSH access
 - Observe drift/manual changes in a more legacy-like topology
 - Migrate toward private-subnet application placement via solution/
@@ -106,6 +115,18 @@ Bootstrap intent:
 ```
 
 첫 배포 절차는 [initial-deploy.md](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-init/docs/initial-deploy.md) 에 정리했다.
+
+## 스택 구성
+
+- `UnicornRentalNetworkStack`: VPC, subnet, security group
+- `UnicornRentalAccessStack`: operator IAM user, access key, CloudFormation execution role
+- `UnicornRentalApplicationStack`: EC2 instance role, DynamoDB, SSH key pair, ALB, target group, ASG, app EC2
+
+순차 배포 의도:
+
+1. `UnicornRentalNetworkStack`
+2. `UnicornRentalAccessStack`
+3. 실제 실습 시점에만 `UnicornRentalApplicationStack`
 
 ## 권한 모델
 
@@ -158,13 +179,17 @@ CDK 스택은 위 파일을 읽어 placeholder를 치환한 뒤 user data로 주
 
 ## 코드 구조
 
-- `lib/stacks/unicorn-rental-bootstrap-stack.ts`: 파라미터와 output을 조립하는 얇은 스택 엔트리
+- `bin/unicorn-rental-init.ts`: 다중 스택 CDK 앱 엔트리
+- `lib/stacks/unicorn-rental-network-stack.ts`: 네트워크 스택
+- `lib/stacks/unicorn-rental-access-stack.ts`: 접근 제어 스택
+- `lib/stacks/unicorn-rental-application-stack.ts`: 애플리케이션 스택
 - `lib/bootstrap/network.ts`: VPC, subnet, security group
-- `lib/bootstrap/application.ts`: DynamoDB, EC2 role, SSH key pair, user data, ASG, ALB, target group
+- `lib/bootstrap/application.ts`: DynamoDB, SSH key pair, user data, ASG, ALB, target group
 - `lib/bootstrap/operator-access.ts`: operator IAM user, access key, CloudFormation execution role
+- `lib/bootstrap/settings.ts`: app context 기반 설정 로드
 - `lib/bootstrap/user-data.ts`: 외부 user data 자산 로드 및 템플릿 치환
 
 주의:
 
-- 파일은 나눴지만 리소스는 여전히 스택 루트 scope에 생성한다.
-- 이렇게 해야 CDK logical ID가 바뀌지 않아 drift/전환 실험에 불필요한 리소스 교체가 생기지 않는다.
+- 디렉터리는 하나지만 CloudFormation 스택은 분리되어 있다.
+- 비용 절감을 위해 application 리소스만 나중에 배포할 수 있다.

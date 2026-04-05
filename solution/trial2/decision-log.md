@@ -237,6 +237,19 @@
 
 ---
 
+## 2026-04-06T01:55 — 운영 상태 점검 및 누락 설정 보완
+
+- **점검 결과**:
+  - `unicorn-rental-ecs-task-low` 알람 ALARM → Container Insights 미활성화로 데이터포인트 없음
+  - DynamoDB PITR 실제 미적용 상태 확인 (decision-log 기록과 불일치)
+  - DynamoDB TTL은 이미 활성화 상태 (describe-table 조회 방식 문제로 null 표시됐던 것)
+- **적용 내용**:
+  - ECS Container Insights 활성화 → `ecs-task-low` 알람 정상화 예정
+  - DynamoDB PITR 재활성화 (ENABLED 확인)
+- **ECS Task Definition 이슈**: revision 5가 수동 생성본 → CDK 재배포 시 덮어씌워질 수 있음 (TODO)
+
+---
+
 ## 2026-04-06T01:45 — ECS 마이그레이션 완료 (트래픽 100% 전환)
 
 - **문제 해결 과정**:

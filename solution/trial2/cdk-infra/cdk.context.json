@@ -1,0 +1,42 @@
+{
+  "vpc-provider:account=807876133169:filter.vpc-id=vpc-03942a987eca4fc09:region=ap-northeast-2:returnAsymmetricSubnets=true": {
+    "vpcId": "vpc-03942a987eca4fc09",
+    "vpcCidrBlock": "10.0.0.0/16",
+    "ownerAccountId": "807876133169",
+    "availabilityZones": [],
+    "subnetGroups": [
+      {
+        "name": "public",
+        "type": "Public",
+        "subnets": [
+          {
+            "subnetId": "subnet-0a17534532f685133",
+            "cidr": "10.0.0.0/24",
+            "availabilityZone": "ap-northeast-2a",
+            "routeTableId": "rtb-05923d36fd20fce37"
+          },
+          {
+            "subnetId": "subnet-06ab851233d51d199",
+            "cidr": "10.0.1.0/24",
+            "availabilityZone": "ap-northeast-2b",
+            "routeTableId": "rtb-0adbc4865b1964756"
+          }
+        ]
+      }
+    ]
+  },
+  "load-balancer:account=807876133169:loadBalancerArn=arn$:aws$:elasticloadbalancing$:ap-northeast-2$:807876133169$:loadbalancer/app/unicorn-rental-alb/9dce59bbce0f60cb:loadBalancerType=application:region=ap-northeast-2": {
+    "loadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:807876133169:loadbalancer/app/unicorn-rental-alb/9dce59bbce0f60cb",
+    "loadBalancerCanonicalHostedZoneId": "ZWKZPGTI48KDX",
+    "loadBalancerDnsName": "unicorn-rental-alb-97259582.ap-northeast-2.elb.amazonaws.com",
+    "vpcId": "vpc-03942a987eca4fc09",
+    "securityGroupIds": [
+      "sg-0126d5e3c80c54844"
+    ],
+    "ipAddressType": "ipv4"
+  },
+  "security-group:account=807876133169:region=ap-northeast-2:securityGroupId=sg-0126d5e3c80c54844": {
+    "securityGroupId": "sg-0126d5e3c80c54844",
+    "allowAllOutbound": false
+  }
+}

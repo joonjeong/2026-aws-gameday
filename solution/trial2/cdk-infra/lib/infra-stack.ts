@@ -4,60 +4,128 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 
-/**
- * 기존 UnicornRentalApplicationStack 리소스를 참조하는 CDK 스택.
- * 리소스를 직접 생성하지 않고 fromXxx() lookup으로 참조하여
- * 확장성/운영 개선 작업의 기반으로 사용한다.
- */
 export class UnicornRentalInfraStack extends cdk.Stack {
-  // 외부에서 참조할 수 있도록 public으로 노출
-  public readonly vpc: ec2.IVpc;
-  public readonly alb: elbv2.IApplicationLoadBalancer;
-  public readonly targetGroup: elbv2.IApplicationTargetGroup;
-  public readonly asg: autoscaling.IAutoScalingGroup;
-  public readonly table: dynamodb.ITable;
-  public readonly instanceRole: iam.IRole;
-
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // ── VPC lookup ────────────────────────────────────────────
-    this.vpc = ec2.Vpc.fromLookup(this, 'Vpc', {
-      vpcId: 'vpc-03942a987eca4fc09',
-    });
+    // ── 기존 리소스 lookup ────────────────────────────────────
+    const vpc = ec2.Vpc.fromLookup(this, 'Vpc', { vpcId: 'vpc-03942a987eca4fc09' });
 
-    // ── ALB lookup ────────────────────────────────────────────
-    this.alb = elbv2.ApplicationLoadBalancer.fromLookup(this, 'Alb', {
+    const alb = elbv2.ApplicationLoadBalancer.fromLookup(this, 'Alb', {
       loadBalancerArn: 'arn:aws:elasticloadbalancing:ap-northeast-2:807876133169:loadbalancer/app/unicorn-rental-alb/9dce59bbce0f60cb',
     });
 
-    // ── Target Group lookup ───────────────────────────────────
-    this.targetGroup = elbv2.ApplicationTargetGroup.fromTargetGroupAttributes(this, 'TargetGroup', {
+    const targetGroup = elbv2.ApplicationTargetGroup.fromTargetGroupAttributes(this, 'TargetGroup', {
       targetGroupArn: 'arn:aws:elasticloadbalancing:ap-northeast-2:807876133169:targetgroup/unicorn-rental-tg/889bd0a934f5a509',
     });
 
-    // ── ASG lookup ────────────────────────────────────────────
-    this.asg = autoscaling.AutoScalingGroup.fromAutoScalingGroupName(this, 'Asg', 'unicorn-rental-asg');
+    const asg = autoscaling.AutoScalingGroup.fromAutoScalingGroupName(this, 'Asg', 'unicorn-rental-asg');
 
-    // ── DynamoDB lookup ───────────────────────────────────────
-    this.table = dynamodb.Table.fromTableArn(this, 'Table',
+    const table = dynamodb.Table.fromTableArn(this, 'Table',
       'arn:aws:dynamodb:ap-northeast-2:807876133169:table/unicorn-rental-orders',
     );
 
-    // ── IAM Role lookup ───────────────────────────────────────
-    this.instanceRole = iam.Role.fromRoleName(this, 'InstanceRole', 'unicorn-rental-ec2-role');
-
-    // ── Stack Outputs (참조용) ────────────────────────────────
+    // ── ALB Listener (HTTP:80 → TG) ───────────────────────────
+    // 실제 적용: HTTP:80 Listener, weighted_random, anomaly_mitigation ON,
+    //            drop_invalid_header_fields ON, deletion_protection ON
+    // CDK fromLookup 리소스는 Listener/TG 속성 변경 불가 → CfnResource로 관리
     new cdk.CfnOutput(this, 'AlbDns', {
-      value: this.alb.loadBalancerDnsName,
-      description: 'ALB DNS Name',
+      value: alb.loadBalancerDnsName,
+      description: 'ALB DNS Name — Listener HTTP:80, weighted_random, anomaly_mitigation ON',
+    });
+
+    // ── ASG 설정 현황 (직접 변경됨, CDK 참조용) ───────────────
+    // desired: 4, max: 8, DefaultInstanceWarmup: 90s
+    // Health Check: interval 10s, threshold 2/2
+    new cdk.CfnOutput(this, 'AsgName', {
+      value: asg.autoScalingGroupName,
+      description: 'ASG — desired:4, max:8, warmup:90s, HC interval:10s threshold:2',
+    });
+
+    // ── Quest 2: 알람 / SNS ───────────────────────────────────
+    const alertTopic = new sns.Topic(this, 'AlertTopic', {
+      topicName: 'unicorn-rental-alerts',
+      displayName: 'Unicorn Rental Alerts',
+    });
+
+    const makeAlarm = (id: string, name: string, desc: string, metric: cloudwatch.Metric, threshold: number, periods: number) => {
+      const alarm = new cloudwatch.Alarm(this, id, {
+        alarmName: name, alarmDescription: desc, metric, threshold,
+        evaluationPeriods: periods,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+      alarm.addAlarmAction(new actions.SnsAction(alertTopic));
+    };
+
+    makeAlarm('RequestCountHighAlarm', 'unicorn-rental-request-count-high', 'ALB 요청 수 급증',
+      new cloudwatch.Metric({ namespace: 'AWS/ApplicationELB', metricName: 'RequestCountPerTarget', dimensionsMap: { TargetGroup: 'targetgroup/unicorn-rental-tg/889bd0a934f5a509' }, statistic: 'Sum', period: cdk.Duration.minutes(1) }), 1000, 2);
+
+    makeAlarm('ErrorRateHighAlarm', 'unicorn-rental-5xx-high', '5xx 에러 급증',
+      new cloudwatch.Metric({ namespace: 'AWS/ApplicationELB', metricName: 'HTTPCode_Target_5XX_Count', dimensionsMap: { LoadBalancer: 'app/unicorn-rental-alb/9dce59bbce0f60cb' }, statistic: 'Sum', period: cdk.Duration.minutes(1) }), 50, 2);
+
+    makeAlarm('CpuCriticalAlarm', 'unicorn-rental-cpu-critical', 'CPU 80% 초과',
+      new cloudwatch.Metric({ namespace: 'AWS/EC2', metricName: 'CPUUtilization', dimensionsMap: { AutoScalingGroupName: 'unicorn-rental-asg' }, statistic: 'Average', period: cdk.Duration.minutes(1) }), 80, 2);
+
+    makeAlarm('UnhealthyHostAlarm', 'unicorn-rental-unhealthy-host', 'Unhealthy 인스턴스 감지',
+      new cloudwatch.Metric({ namespace: 'AWS/ApplicationELB', metricName: 'UnHealthyHostCount', dimensionsMap: { LoadBalancer: 'app/unicorn-rental-alb/9dce59bbce0f60cb', TargetGroup: 'targetgroup/unicorn-rental-tg/889bd0a934f5a509' }, statistic: 'Maximum', period: cdk.Duration.minutes(1) }), 0, 1);
+
+    // ── Quest 3: DynamoDB Streams + Lambda ────────────────────
+    // DynamoDB: Streams(NEW_AND_OLD_IMAGES), TTL(ttl), PITR(35일),
+    //           DeletionProtection — 기존 스택 관리 리소스라 직접 변경 적용됨
+
+    const streamProcessor = new lambda.Function(this, 'StreamProcessor', {
+      functionName: 'unicorn-rental-stream-processor',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
+exports.handler = async (event) => {
+  for (const record of event.Records) {
+    const { eventName, dynamodb: db } = record;
+    const newImage = db.NewImage ? JSON.stringify(db.NewImage) : null;
+    const oldImage = db.OldImage ? JSON.stringify(db.OldImage) : null;
+    console.log(JSON.stringify({ eventName, newImage, oldImage }));
+  }
+  return { statusCode: 200 };
+};
+      `),
+      timeout: cdk.Duration.seconds(30),
+      environment: { TABLE_NAME: 'unicorn-rental-orders' },
+    });
+
+    streamProcessor.addToRolePolicy(new iam.PolicyStatement({
+      actions: [
+        'dynamodb:GetRecords',
+        'dynamodb:GetShardIterator',
+        'dynamodb:DescribeStream',
+        'dynamodb:ListStreams',
+      ],
+      resources: ['arn:aws:dynamodb:ap-northeast-2:807876133169:table/unicorn-rental-orders/stream/*'],
+    }));
+
+    // Event Source Mapping은 CLI로 생성됨 (UUID: 74127d07-e267-48e9-916e-d79a6a010792)
+    // Stream ARN: arn:aws:dynamodb:ap-northeast-2:807876133169:table/unicorn-rental-orders/stream/2026-04-05T15:30:19.126
+
+    // ── Outputs ───────────────────────────────────────────────
+    new cdk.CfnOutput(this, 'AlertTopicArn', {
+      value: alertTopic.topicArn,
+      description: 'SNS Alert Topic ARN',
+    });
+
+    new cdk.CfnOutput(this, 'StreamProcessorArn', {
+      value: streamProcessor.functionArn,
+      description: 'Stream Processor Lambda ARN',
     });
 
     new cdk.CfnOutput(this, 'TableName', {
-      value: this.table.tableName,
-      description: 'DynamoDB Table Name',
+      value: table.tableName,
+      description: 'DynamoDB — Streams ON, TTL(ttl), PITR 35일, DeletionProtection ON',
     });
   }
 }

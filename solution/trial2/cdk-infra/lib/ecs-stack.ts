@@ -70,13 +70,6 @@ export class UnicornRentalEcsStack extends cdk.Stack {
         TABLE_NAME: 'unicorn-rental-orders',
       },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'unicorn-rental' }),
-      healthCheck: {
-        command: ['CMD-SHELL', 'curl -f http://localhost:8080/actuator/health || exit 1'],
-        interval: cdk.Duration.seconds(10),
-        timeout: cdk.Duration.seconds(5),
-        retries: 2,
-        startPeriod: cdk.Duration.seconds(30),
-      },
     });
 
     // ── ECS Target Group (신규) ───────────────────────────────
@@ -87,7 +80,7 @@ export class UnicornRentalEcsStack extends cdk.Stack {
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
       healthCheck: {
-        path: '/actuator/health',
+        path: '/',
         interval: cdk.Duration.seconds(10),
         healthyThresholdCount: 2,
         unhealthyThresholdCount: 2,

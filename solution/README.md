@@ -1,71 +1,33 @@
-# Union Rental GameDay Solution
+# Unicorn Rental GameDay Solution
 
-이 디렉터리는 intentionally minimal 상태로 비워 둔다.
+이 디렉터리는 GameDay 모의 훈련 결과와 실제 작업에 사용한 솔루션을 함께 보관한다. `trial1/` 은 리허설 산출물 모음이고, `enigma/` 는 실제 작업 시 사용한 트래픽 주입 도구다.
 
-## 역할
+## 디렉터리 구성
 
-- [bootstrap README](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-init/README.md) 에서 만든 거친 초기 환경을 개선하는 작업영역
-- 실제 GameDay 진행 중 풀어낸 해결책, 전환 전략, 검증 결과를 이후에 정리할 자리
+- `trial1/`: 첫 모의 훈련에서 만든 분석 문서, 작업 로그, 애플리케이션/인프라 산출물
+- `enigma/`: 실제 GameDay 대상 환경에 baseline/anomaly traffic 을 주입하기 위해 사용한 AWS CDK 앱
+
+## 문서 안내
+
+- [trial1/infra-analysis.md](trial1/infra-analysis.md): 모의 훈련 시작 시점의 인프라 진단과 개선 우선순위
+- [trial1/gameday-log.md](trial1/gameday-log.md): 모의 훈련 중 수행한 조치와 시각별 결과
+- [trial1/cdk/README.md](trial1/cdk/README.md): 모의 훈련에서 사용한 CDK 스택 설명
+- [enigma/README.md](enigma/README.md): 실제 작업용 트래픽 주입 솔루션 개요
+- [enigma/docs/deploy.md](enigma/docs/deploy.md): `enigma` 배포 및 운영 절차
 
 ## bootstrap에서 solution으로
 
-| bootstrap의 거친 상태 | solution에서 다룰 방향 |
+`bootstrap/unicorn-rental-init` 는 GameDay 시작점 역할을 하는 거친 초기 환경이고, 이 `solution` 디렉터리는 그 환경을 진단하고 보완한 결과를 정리한다.
+
+| bootstrap의 거친 상태 | solution에서 정리한 대응 |
 |---|---|
-| public subnet 기반 app EC2 | private subnet 중심 배치 또는 ECS 전환 |
-| 직접 SSH 가능한 운영 접근 | 자동화된 배포와 통제된 접근 |
-| 수동 변경과 drift 발생 쉬움 | IaC, CI/CD, observability 강화 |
-| 일단 돌아가는 Java workload | 점진적 배포, rollback 가능한 구조 |
+| public subnet 기반 app EC2 | `trial1/cdk` 에서 private subnet/ECS 전환 리허설, 실제 대응용 도구는 `enigma` 로 분리 |
+| 직접 SSH 가능한 운영 접근 | 보안 취약점 분석과 대체 운영 방식 기록 |
+| 수동 변경과 drift 발생 쉬움 | 작업 로그와 IaC 산출물을 함께 보관해 재현 가능성 확보 |
+| 일단 돌아가는 Java workload | 트래픽 주입, 관측, 전환 검증 흐름 문서화 |
 
-## 현재 상태
+## 사용 기준
 
-- 현재는 README만 남긴 최소 구조다.
-- 구체적인 solution 코드는 GameDay 진행 중 실제로 필요한 형태에 맞춰 다시 추가한다.
-
-## 작성 템플릿
-
-아래 섹션은 GameDay 진행 중 실제 solution을 정리할 때 채워 넣는다.
-
-### 1. 문제 정의
-
-- 증상:
-- 영향 범위:
-- 초기 가설:
-
-### 2. 목표 상태
-
-- 단기 복구 목표:
-- 구조 개선 목표:
-- bootstrap 대비 개선 포인트:
-
-### 3. 구현 범위
-
-- 이번에 바꾸는 것:
-- 이번에는 일부러 안 바꾸는 것:
-- 전제 조건:
-
-### 4. 변경 내용
-
-- 인프라:
-- 애플리케이션:
-- 배포:
-- 관측성:
-- 보안/접근 제어:
-
-### 5. 검증
-
-- 배포 확인:
-- 기능 확인:
-- 장애 복구 확인:
-- 롤백 확인:
-- 남은 검증 공백:
-
-### 6. 리스크
-
-- 현재 남아 있는 운영 리스크:
-- GameDay 중 추가로 확인할 항목:
-- 실제 운영 반영 전 별도 검토가 필요한 항목:
-
-### 7. 다음 단계
-
-- 즉시 후속 작업:
-- GameDay 이후 정리할 작업:
+- 리허설 결과를 확인할 때는 `trial1/` 부터 본다.
+- 실제 작업에 투입한 도구와 절차를 확인할 때는 `enigma/` 문서를 본다.
+- 새로운 GameDay 회차가 생기면 `trialN/` 과 실제 운영용 솔루션을 같은 기준으로 추가한다.

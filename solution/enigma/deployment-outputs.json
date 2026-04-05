@@ -1,0 +1,16 @@
+{
+  "EnigmaTrafficStack": {
+    "TrafficTaskSecurityGroupId": "sg-07bfc23e1d5968bba",
+    "AnomalyScheduleName": "enigma-anomaly",
+    "AnomalyTaskDefinitionArn": "arn:aws:ecs:ap-northeast-2:807876133169:task-definition/enigma-anomaly-task:4",
+    "TargetBaseUrl": "http://unicorn-rental-alb-198779028.ap-northeast-2.elb.amazonaws.com",
+    "BaselineLogGroupName": "/aws/ecs/enigma-baseline",
+    "TrafficVpcId": "vpc-08d0359fb21747c85",
+    "TrafficClusterName": "enigma-traffic-cluster",
+    "BaselineTaskDefinitionArn": "arn:aws:ecs:ap-northeast-2:807876133169:task-definition/enigma-baseline-task:4",
+    "ScheduleGroupName": "enigma-schedules",
+    "AnomalyLogGroupName": "/aws/ecs/enigma-anomaly",
+    "TrafficPublicSubnetIds": "subnet-00ca0eb5989003994,subnet-05cf3cdac24fc2eec",
+    "BaselineScheduleName": "enigma-baseline"
+  }
+}

@@ -1,0 +1,18 @@
+[Unit]
+Description=Unicorn Rental bootstrap Java workload
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/opt/unicorn-rental/app
+EnvironmentFile=/etc/unicorn-rental.env
+ExecStart=/usr/bin/java --add-modules jdk.httpserver -cp /opt/unicorn-rental/app UnicornRentalApp
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

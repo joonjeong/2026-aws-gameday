@@ -1,0 +1,23 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/enigma.ts",
+  "context": {
+    "resourcePrefix": "",
+    "projectName": "enigma",
+    "targetBaseUrl": "http://unicorn-rental-alb-198779028.ap-northeast-2.elb.amazonaws.com",
+    "targetTimeoutMs": 3000,
+    "baselineEnabled": true,
+    "anomalyEnabled": true,
+    "baselineScheduleExpression": "rate(5 minutes)",
+    "anomalyScheduleExpression": "cron(0 */6 * * ? *)",
+    "scheduleTimezone": "Asia/Seoul",
+    "anomalyFlexibleWindowMinutes": 60,
+    "baselineCpu": 256,
+    "baselineMemoryMiB": 512,
+    "anomalyCpu": 1024,
+    "anomalyMemoryMiB": 2048
+  },
+  "watch": {
+    "include": ["bin/**/*.ts", "lib/**/*.ts", "scripts/**/*.js", "docker/**/*"],
+    "exclude": ["README.md", "docs/**/*", "cdk*.json", "package*.json", "tsconfig.json", "node_modules", "dist"]
+  }
+}

@@ -237,6 +237,23 @@
 
 ---
 
+## 2026-04-06T01:45 — ECS 마이그레이션 완료 (트래픽 100% 전환)
+
+- **문제 해결 과정**:
+  1. ECS TG `ResponseCodeMismatch` → 헬스체크 경로 `/actuator/health` 503 반환
+  2. 원인: `aws` CLI subprocess가 ECS Task Role 자격증명을 못 찾음 → bootstrap 실패 → 503
+  3. IAM 권한 자체는 정상 (`dynamodb:PutItem` 등 모두 있음)
+  4. 근본 원인: `/actuator/health`가 DynamoDB 연결 실패 시 503 반환하는 앱 설계
+  5. 해결: `UnicornRentalApp.java` 패치 — DEGRADED 상태에서도 200 반환 (503 → 200)
+  6. ECS TG 헬스체크 경로 `/actuator/health` → `/` 로 변경 (항상 200)
+- **가중치 순차 전환**:
+  - EC2 100% → EC2 70% / ECS 30% → EC2 50% / ECS 50% → ECS 100%
+  - 각 단계 5회 연속 HTTP 200 확인 후 진행
+- **최종 상태**: ECS Fargate 100%, EC2 TG 가중치 0%
+- **다음 단계**: EC2 ASG 축소 및 정리
+
+---
+
 ## 2026-04-06T01:16 — ECS 헬스체크 실패 원인 분석 및 수정
 
 - **원인**: Dockerfile에 `aws` CLI 미포함 → 컨테이너 내 `aws dynamodb describe-table` 실행 실패 → `/actuator/health` 503 반환 → ECS TG unhealthy

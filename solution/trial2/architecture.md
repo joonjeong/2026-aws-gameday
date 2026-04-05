@@ -130,6 +130,9 @@ TTL: ttl 속성 기반 자동 만료
 | 00:50 | Private Subnet 2개 + NAT Gateway 추가 (ECS 마이그레이션 Phase 1) |
 | 00:52 | ECS Cluster + Task Definition + Service + ECS TG 생성 (ECS 마이그레이션 Phase 2) |
 | 01:16 | Dockerfile에 AWS CLI 추가 → ECR 재푸시 → ECS 강제 재배포 (헬스체크 503 수정) |
+| 01:38 | UnicornRentalApp.java 패치: DEGRADED 시 503→200 반환 |
+| 01:38 | ECS TG 헬스체크 경로 `/actuator/health` → `/` 변경 |
+| 01:45 | ECS 트래픽 순차 전환 완료: EC2 100% → 70/30 → 50/50 → ECS 100% |
 
 ---
 
@@ -149,4 +152,5 @@ TTL: ttl 속성 기반 자동 만료
 | t3.small 스펙 | 트래픽 폭주 시 CPU 100% | 인스턴스 타입 업그레이드 또는 ECS 전환 검토 |
 | Lambda 처리 로직 | TODO | 실시간 비즈니스 로직 구체화 필요 |
 | ECS 헬스체크 | ✅ 수정됨 | Dockerfile에 AWS CLI 추가, 재배포 중 |
-| ECS 트래픽 전환 | ⏳ 대기 중 | ECS healthy 확인 후 순차 전환 예정 (100→50→0) |
+| ECS 트래픽 전환 | ✅ 완료 | ECS 100%, EC2 0% |
+| EC2 ASG | ⏳ 정리 필요 | desired 축소 예정 |

@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node --prefer-ts-exts bin/unicorn-rental-init.ts",
+  "app": "npx ts-node --prefer-ts-exts bin/unicorn-rental-simple.ts",
   "context": {
     "resourcePrefix": "",
     "projectName": "unicorn-rental",

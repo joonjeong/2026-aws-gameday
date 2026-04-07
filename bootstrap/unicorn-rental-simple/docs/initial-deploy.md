@@ -1,6 +1,6 @@
 # Unicorn Rental Initial Deploy
 
-이 문서는 현재 `bootstrap/unicorn-rental-init` 기준의 배포와 기본 검증 절차만 정리한다.
+이 문서는 현재 `bootstrap/unicorn-rental-simple` 기준의 배포와 기본 검증 절차만 정리한다.
 
 현재 구성:
 
@@ -15,7 +15,7 @@
 
 - AWS CLI 설정 완료
 - CDK CLI v2 설치
-- `bootstrap/unicorn-rental-init` 디렉터리에서 작업
+- `bootstrap/unicorn-rental-simple` 디렉터리에서 작업
 
 권장 확인:
 
@@ -28,11 +28,11 @@ npm run synth
 
 ## 2. 설정
 
-배포 설정은 [cdk.json](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-init/cdk.json) 의 `context` 로 관리한다.
+배포 설정은 [cdk.json](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-simple/cdk.json) 의 `context` 로 관리한다.
 
 ```json
 {
-  "app": "npx ts-node --prefer-ts-exts bin/unicorn-rental-init.ts",
+  "app": "npx ts-node --prefer-ts-exts bin/unicorn-rental-simple.ts",
   "context": {
     "resourcePrefix": "",
     "projectName": "unicorn-rental",

@@ -1,6 +1,6 @@
-# Unicorn Rental Init Bootstrap
+# Unicorn Rental Simple Bootstrap
 
-`bootstrap/unicorn-rental-init` 는 Unicorn Rental bootstrap 환경의 현재 기준 인프라를 생성하는 AWS CDK 앱이다.
+`bootstrap/unicorn-rental-simple` 는 Unicorn Rental bootstrap 환경의 현재 기준 인프라를 생성하는 AWS CDK 앱이다.
 
 이 문서는 현재 버전만 다룬다.
 
@@ -78,11 +78,11 @@ npm run synth
 
 ## 설정
 
-설정값은 [cdk.json](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-init/cdk.json) 의 `context` 에 둔다.
+설정값은 [cdk.json](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-simple/cdk.json) 의 `context` 에 둔다.
 
 ```json
 {
-  "app": "npx ts-node --prefer-ts-exts bin/unicorn-rental-init.ts",
+  "app": "npx ts-node --prefer-ts-exts bin/unicorn-rental-simple.ts",
   "context": {
     "resourcePrefix": "",
     "projectName": "unicorn-rental",
@@ -99,4 +99,4 @@ npm run synth
 - `projectName`: 리소스 이름, 앱 디렉터리, `systemd` 서비스 이름의 기준값이다
 - `healthCheckPath`: ALB target group health check 경로다
 
-배포, 출력값 확인, SSH 접속 절차는 [initial-deploy.md](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-init/docs/initial-deploy.md) 에 정리했다.
+배포, 출력값 확인, SSH 접속 절차는 [initial-deploy.md](/Users/joonjeong/workspace/2026-aws-gameday/bootstrap/unicorn-rental-simple/docs/initial-deploy.md) 에 정리했다.

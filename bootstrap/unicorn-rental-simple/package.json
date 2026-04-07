@@ -1,11 +1,11 @@
 {
-  "name": "unicorn-rental-init-bootstrap",
+  "name": "unicorn-rental-simple-bootstrap",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test",
-    "synth": "npm run build && node dist/bin/unicorn-rental-init.js"
+    "synth": "npm run build && node dist/bin/unicorn-rental-simple.js"
   },
   "dependencies": {
     "aws-cdk-lib": "2.243.0",

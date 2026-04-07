@@ -1,0 +1,47 @@
+#!/bin/bash
+set -euo pipefail
+
+exec > >(tee /var/log/{{SERVICE_NAME}}-bootstrap.log) 2>&1
+trap 'status=$?; echo "bootstrap failed for {{SERVICE_NAME}} with exit ${status}"; journalctl -u {{SERVICE_NAME}}.service --no-pager -n 100 || true; exit ${status}' ERR
+
+dnf install -y awscli jq java-17-amazon-corretto-headless
+
+install -d -o ec2-user -g ec2-user {{APP_DIRECTORY}}
+
+for required_file in \
+  "{{ARTIFACT_PATH}}" \
+  "{{ENV_FILE_PATH}}" \
+  "{{SERVICE_UNIT_PATH}}"
+do
+  test -s "${required_file}"
+done
+
+command -v aws
+aws --version
+db_secret_json="$(aws secretsmanager get-secret-value --secret-id '{{DB_SECRET_ARN}}' --query SecretString --output text)"
+db_password="$(printf '%s' "${db_secret_json}" | jq -r '.password')"
+if [[ -z "${db_password}" || "${db_password}" == "null" ]]; then
+  echo "database password lookup failed"
+  exit 1
+fi
+
+printf '\nSPRING_DATASOURCE_PASSWORD=%s\n' "${db_password}" >> "{{ENV_FILE_PATH}}"
+chmod 600 {{ENV_FILE_PATH}}
+chmod 644 {{SERVICE_UNIT_PATH}}
+chown -R ec2-user:ec2-user {{APP_DIRECTORY}}
+chown ec2-user:ec2-user {{ARTIFACT_PATH}}
+
+systemctl daemon-reload
+systemctl enable --now {{SERVICE_NAME}}.service
+
+for attempt in $(seq 1 15); do
+  if systemctl is-active --quiet {{SERVICE_NAME}}.service; then
+    echo "{{SERVICE_NAME}}.service is active"
+    exit 0
+  fi
+  sleep 1
+done
+
+echo "{{SERVICE_NAME}}.service did not become active"
+journalctl -u {{SERVICE_NAME}}.service --no-pager -n 100 || true
+exit 1

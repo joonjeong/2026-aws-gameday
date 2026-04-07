@@ -1,0 +1,18 @@
+[Unit]
+Description=Unicorn Rental Complex Spring Boot service
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory={{APP_DIRECTORY}}
+EnvironmentFile={{ENV_FILE_PATH}}
+ExecStart=/usr/bin/java -XX:+ExitOnOutOfMemoryError -jar {{ARTIFACT_PATH}}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

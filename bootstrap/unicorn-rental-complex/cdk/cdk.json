@@ -1,0 +1,21 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/unicorn-rental-complex.ts",
+  "context": {
+    "resourcePrefix": "",
+    "projectName": "unicorn-rental-complex",
+    "instanceType": "t3.small",
+    "databaseInstanceType": "t3.micro",
+    "desiredCapacity": 2,
+    "minCapacity": 2,
+    "maxCapacity": 4,
+    "healthCheckPath": "/actuator/health",
+    "databaseName": "unicorn_rental",
+    "databaseUsername": "unicorn_app",
+    "artifactFileName": "unicorn-rental-complex-app.jar",
+    "sessionTtlHours": 8
+  },
+  "watch": {
+    "include": ["bin/**/*.ts", "lib/**/*.ts"],
+    "exclude": ["README.md", "cdk*.json", "package*.json", "tsconfig.json", "node_modules", "dist"]
+  }
+}

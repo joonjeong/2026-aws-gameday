@@ -24,8 +24,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation platform('software.amazon.awssdk:bom:2.20.162')
 	implementation 'software.amazon.awssdk:dynamodb'
+	implementation 'software.amazon.awssdk:url-connection-client'
 	runtimeOnly 'org.postgresql:postgresql'
-	runtimeOnly 'software.amazon.awssdk:url-connection-client'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

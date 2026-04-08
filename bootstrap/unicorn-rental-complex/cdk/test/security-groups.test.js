@@ -223,6 +223,7 @@ test('application user data downloads the jar artifact and renders local runtime
   const templateJson = JSON.stringify(templates.application);
 
   assert.ok(userData, 'expected launch template user data');
+  assert.match(userData, /install -d -o ec2-user -g ec2-user .*\/opt\/unicorn-rental-complex\/app/);
   assert.equal((userData.match(/aws s3 cp/g) ?? []).length, 1);
   assert.match(userData, /unicorn-rental-complex-app\.jar/);
   assert.match(userData, /\/etc\/unicorn-rental-complex\.env/);
@@ -231,6 +232,11 @@ test('application user data downloads the jar artifact and renders local runtime
   assert.match(userData, /SESSION_TABLE_NAME=/);
   assert.match(userData, /SessionTable/);
   assert.doesNotMatch(userData, /javac/);
+  assert.ok(
+    userData.indexOf('install -d -o ec2-user -g ec2-user')
+      < userData.indexOf('aws s3 cp'),
+    'expected app directory creation before artifact download',
+  );
   assert.doesNotMatch(templateJson, /UnicornRentalApp\.java/);
 });
 

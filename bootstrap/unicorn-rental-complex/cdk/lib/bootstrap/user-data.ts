@@ -49,6 +49,7 @@ export function createBootstrapUserData(
     SERVICE_UNIT_PATH: serviceUnitLocalPath,
   });
   userData.addCommands('set -euo pipefail');
+  userData.addCommands(`install -d -o ec2-user -g ec2-user '${props.appDirectory}'`);
   userData.addS3DownloadCommand({
     bucket: props.artifactBucket,
     bucketKey: props.artifactObjectKey,

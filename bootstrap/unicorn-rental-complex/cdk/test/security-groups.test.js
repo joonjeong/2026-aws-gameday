@@ -112,6 +112,11 @@ test('application stack provisions launch template, postgres, session table, art
     ),
     'expected a private Postgres instance',
   );
+  const database = findResource(
+    templates.application,
+    (resource) => resource.Type === 'AWS::RDS::DBInstance',
+  );
+  assert.equal(database?.Properties?.EngineVersion, '16.12');
   assert.ok(
     findResource(
       templates.application,

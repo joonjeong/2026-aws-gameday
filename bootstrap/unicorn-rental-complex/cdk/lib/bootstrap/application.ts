@@ -151,7 +151,7 @@ export function createBootstrapApplication(
     deleteAutomatedBackups: true,
     deletionProtection: false,
     engine: rds.DatabaseInstanceEngine.postgres({
-      version: rds.PostgresEngineVersion.VER_16_4,
+      version: rds.PostgresEngineVersion.VER_16_12,
     }),
     instanceType: new ec2.InstanceType(settings.databaseInstanceType),
     multiAz: false,

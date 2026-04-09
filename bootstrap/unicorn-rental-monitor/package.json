@@ -1,0 +1,13 @@
+{
+  "name": "unicorn-rental-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test",
+    "synth": "node bin/unicorn-rental-monitor.js"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.243.0",
+    "constructs": "^10.4.2"
+  }
+}

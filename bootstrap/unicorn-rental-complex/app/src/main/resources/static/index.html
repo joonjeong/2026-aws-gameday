@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Unicorn Rental Control Deck</title>
+    <style>
+      :root {
+        --bg: #f4efe4;
+        --surface: rgba(255, 250, 242, 0.86);
+        --surface-strong: #fffaf3;
+        --ink: #1f2533;
+        --muted: #5d6878;
+        --line: rgba(31, 37, 51, 0.12);
+        --accent: #156f5f;
+        --accent-soft: rgba(21, 111, 95, 0.12);
+        --warn: #c06a00;
+        --warn-soft: rgba(192, 106, 0, 0.14);
+        --danger: #b44736;
+        --danger-soft: rgba(180, 71, 54, 0.14);
+        --success: #156f5f;
+        --shadow: 0 20px 50px rgba(58, 48, 34, 0.12);
+        --radius: 24px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--ink);
+        font-family: "Avenir Next", "Trebuchet MS", "Gill Sans", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(255, 213, 138, 0.48), transparent 32%),
+          radial-gradient(circle at right 12%, rgba(21, 111, 95, 0.2), transparent 28%),
+          linear-gradient(180deg, #fbf6ed 0%, #f4efe4 52%, #ebe3d2 100%);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(90deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+          linear-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+        background-size: 72px 72px;
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent 80%);
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 28px 0 48px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+        animation: rise 0.55s ease both;
+      }
+
+      .hero {
+        overflow: hidden;
+        position: relative;
+        padding: 32px;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -12% -42% auto;
+        width: 320px;
+        height: 320px;
+        border-radius: 999px;
+        background:
+          radial-gradient(circle, rgba(255, 198, 96, 0.48), rgba(255, 198, 96, 0));
+        filter: blur(6px);
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        font-size: 0.78rem;
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
+        gap: 24px;
+        align-items: end;
+      }
+
+      h1,
+      h2,
+      h3 {
+        font-family: Baskerville, "Iowan Old Style", "Palatino Linotype", serif;
+        letter-spacing: -0.02em;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2.6rem, 5vw, 4.6rem);
+        line-height: 0.94;
+      }
+
+      .lede {
+        max-width: 60ch;
+        margin: 18px 0 0;
+        color: var(--muted);
+        line-height: 1.6;
+        font-size: 1.02rem;
+      }
+
+      .step-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 22px;
+      }
+
+      .step-chip,
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        font-size: 0.92rem;
+        font-weight: 700;
+      }
+
+      .step-chip {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.64);
+      }
+
+      .hero-side {
+        padding: 22px;
+        border-radius: 22px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(255, 250, 242, 0.94));
+        border: 1px solid rgba(255, 255, 255, 0.7);
+      }
+
+      .hero-side p {
+        margin: 0 0 12px;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .hero-side strong {
+        color: var(--ink);
+      }
+
+      .notice {
+        margin: 18px 0 0;
+        padding: 14px 18px;
+        border-radius: 18px;
+        font-weight: 700;
+        border: 1px solid transparent;
+        animation: rise 0.7s ease both;
+      }
+
+      .notice.info {
+        background: rgba(31, 37, 51, 0.06);
+        border-color: rgba(31, 37, 51, 0.08);
+      }
+
+      .notice.success {
+        background: var(--accent-soft);
+        border-color: rgba(21, 111, 95, 0.18);
+      }
+
+      .notice.warn {
+        background: var(--warn-soft);
+        border-color: rgba(192, 106, 0, 0.18);
+      }
+
+      .notice.error {
+        background: var(--danger-soft);
+        border-color: rgba(180, 71, 54, 0.18);
+      }
+
+      .dashboard {
+        display: grid;
+        grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .panel {
+        padding: 24px;
+      }
+
+      .panel h2 {
+        margin: 0;
+        font-size: 2rem;
+      }
+
+      .panel-head,
+      .panel-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .panel-head p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 16px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          transform 0.18s ease,
+          box-shadow 0.18s ease,
+          opacity 0.18s ease;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .button-primary {
+        color: #fff;
+        background: linear-gradient(135deg, #156f5f, #0f4d61);
+        box-shadow: 0 12px 28px rgba(15, 77, 97, 0.24);
+      }
+
+      .button-secondary {
+        color: var(--ink);
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid var(--line);
+      }
+
+      .button-danger {
+        color: #fff;
+        background: linear-gradient(135deg, #b44736, #8d362a);
+        box-shadow: 0 12px 28px rgba(141, 54, 42, 0.22);
+      }
+
+      .button-warn {
+        color: #fff;
+        background: linear-gradient(135deg, #ca7c15, #a15e03);
+        box-shadow: 0 12px 28px rgba(161, 94, 3, 0.2);
+      }
+
+      input {
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(31, 37, 51, 0.16);
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--ink);
+        font: inherit;
+      }
+
+      label {
+        display: block;
+        font-size: 0.92rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .session-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+      }
+
+      .session-box,
+      .endpoint-list,
+      .log-list,
+      .orders-list,
+      .rental-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .session-box {
+        margin-top: 18px;
+      }
+
+      .session-state {
+        padding: 18px;
+        border-radius: 18px;
+        background: var(--surface-strong);
+        border: 1px solid rgba(31, 37, 51, 0.08);
+      }
+
+      .session-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .session-grid div,
+      .metric-card {
+        padding: 14px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(31, 37, 51, 0.08);
+      }
+
+      .metric-label {
+        margin: 0 0 6px;
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .metric-value {
+        margin: 0;
+        font-weight: 700;
+        line-height: 1.4;
+        word-break: break-word;
+      }
+
+      .status-pill.available,
+      .status-pill.success {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .status-pill.reserved,
+      .status-pill.warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+
+      .status-pill.returned,
+      .status-pill.info {
+        background: rgba(31, 37, 51, 0.08);
+        color: var(--ink);
+      }
+
+      .status-pill.error {
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+      .endpoint-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .endpoint-item,
+      .log-entry,
+      .order-card,
+      .rental-card {
+        padding: 18px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(31, 37, 51, 0.08);
+        animation: rise 0.55s ease both;
+      }
+
+      .endpoint-item code,
+      .mono {
+        font-family: "SFMono-Regular", "Menlo", "Consolas", monospace;
+        font-size: 0.92rem;
+      }
+
+      .endpoint-item p,
+      .empty-state p,
+      .log-entry p,
+      .order-card p,
+      .rental-card p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .rental-card {
+        display: grid;
+        gap: 16px;
+      }
+
+      .rental-meta,
+      .order-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .rental-card h3,
+      .order-card h3 {
+        margin: 0;
+        font-size: 1.45rem;
+      }
+
+      .action-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .empty-state {
+        padding: 18px;
+        border-radius: 18px;
+        border: 1px dashed rgba(31, 37, 51, 0.18);
+        background: rgba(255, 255, 255, 0.5);
+      }
+
+      .log-entry time,
+      .hint {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .log-entry pre {
+        margin: 10px 0 0;
+        padding: 14px;
+        overflow: auto;
+        border-radius: 16px;
+        background: #201c1a;
+        color: #f4efe4;
+        font-family: "SFMono-Regular", "Menlo", "Consolas", monospace;
+        font-size: 0.82rem;
+        line-height: 1.5;
+      }
+
+      .span-2 {
+        grid-column: span 2;
+      }
+
+      @media (max-width: 980px) {
+        .hero-grid,
+        .dashboard {
+          grid-template-columns: 1fr;
+        }
+
+        .span-2 {
+          grid-column: auto;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .page {
+          width: min(100% - 20px, 100%);
+          padding-top: 20px;
+        }
+
+        .hero,
+        .panel {
+          padding: 20px;
+        }
+
+        .session-form,
+        .session-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .panel-head,
+        .panel-actions {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(14px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero card">
+        <p class="eyebrow">Scenario Landing Page</p>
+        <div class="hero-grid">
+          <div>
+            <h1>Unicorn Rental Control Deck</h1>
+            <p class="lede">
+              This page follows the current API scenario end to end: create a
+              session, inspect the live rental inventory, reserve an asset,
+              return it, and review orders that belong to the active cookie-backed
+              session.
+            </p>
+            <div class="step-strip">
+              <span class="step-chip">1. POST /api/sessions</span>
+              <span class="step-chip">2. GET /api/rentals</span>
+              <span class="step-chip">3. POST /api/orders/reserve</span>
+              <span class="step-chip">4. POST /api/orders/return</span>
+              <span class="step-chip">5. GET /api/orders</span>
+            </div>
+          </div>
+          <aside class="hero-side">
+            <p><strong>Session store:</strong> DynamoDB-backed user sessions</p>
+            <p><strong>Inventory store:</strong> Postgres rental availability</p>
+            <p><strong>Interaction model:</strong> Same-origin fetch with an HttpOnly cookie</p>
+            <div class="button-row">
+              <button id="refresh-board" class="button-secondary" type="button">
+                Refresh board
+              </button>
+            </div>
+          </aside>
+        </div>
+      </header>
+
+      <div id="notice" class="notice info">Loading scenario data...</div>
+
+      <main class="dashboard">
+        <section class="card panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Session</p>
+              <h2>Identity Gate</h2>
+              <p>Start here. The reservation and order APIs require a valid session.</p>
+            </div>
+          </div>
+
+          <form id="session-form" class="session-form">
+            <div>
+              <label for="user-name">User name</label>
+              <input
+                id="user-name"
+                name="userName"
+                type="text"
+                maxlength="40"
+                placeholder="rainbow"
+                autocomplete="off"
+                required
+              />
+            </div>
+            <button class="button-primary" type="submit">Create session</button>
+          </form>
+
+          <div class="session-box">
+            <div id="session-state" class="session-state"></div>
+            <div class="button-row" style="margin-top: 12px;">
+              <button id="refresh-session" class="button-secondary" type="button">
+                Check current session
+              </button>
+              <button id="end-session" class="button-danger" type="button">
+                End session
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Runbook</p>
+              <h2>API Storyline</h2>
+              <p>The page uses the same sequence the backend expects.</p>
+            </div>
+          </div>
+
+          <ul class="endpoint-list">
+            <li class="endpoint-item">
+              <code>POST /api/sessions</code>
+              <p>Create a session record and receive the HttpOnly session cookie.</p>
+            </li>
+            <li class="endpoint-item">
+              <code>GET /api/sessions/current</code>
+              <p>Resolve the current session from the cookie and display the active user.</p>
+            </li>
+            <li class="endpoint-item">
+              <code>GET /api/rentals</code>
+              <p>Read the inventory snapshot from Postgres and show current availability.</p>
+            </li>
+            <li class="endpoint-item">
+              <code>POST /api/orders/reserve</code>
+              <p>Reserve an available rental for the active session.</p>
+            </li>
+            <li class="endpoint-item">
+              <code>POST /api/orders/return</code>
+              <p>Return the latest reserved order owned by the active session.</p>
+            </li>
+            <li class="endpoint-item">
+              <code>GET /api/orders</code>
+              <p>Audit reservation history for the same session cookie.</p>
+            </li>
+          </ul>
+        </section>
+
+        <section class="card panel span-2">
+          <div class="panel-actions">
+            <div>
+              <p class="eyebrow">Inventory</p>
+              <h2>Rental Floor</h2>
+              <p id="inventory-summary">Loading inventory...</p>
+            </div>
+            <div class="button-row">
+              <button id="refresh-rentals" class="button-secondary" type="button">
+                Refresh rentals
+              </button>
+            </div>
+          </div>
+
+          <div id="rentals" class="rental-list"></div>
+        </section>
+
+        <section class="card panel">
+          <div class="panel-actions">
+            <div>
+              <p class="eyebrow">Orders</p>
+              <h2>Session Ledger</h2>
+              <p id="orders-summary">Waiting for session...</p>
+            </div>
+            <div class="button-row">
+              <button id="refresh-orders" class="button-secondary" type="button">
+                Refresh orders
+              </button>
+            </div>
+          </div>
+
+          <div id="orders" class="orders-list"></div>
+        </section>
+
+        <section class="card panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Trace</p>
+              <h2>Recent Responses</h2>
+              <p>Each card shows the latest payload returned by the API.</p>
+            </div>
+          </div>
+
+          <div id="logs" class="log-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const state = {
+        session: null,
+        rentals: [],
+        orders: [],
+        logs: []
+      };
+
+      const elements = {
+        notice: document.getElementById("notice"),
+        sessionForm: document.getElementById("session-form"),
+        userName: document.getElementById("user-name"),
+        sessionState: document.getElementById("session-state"),
+        endSession: document.getElementById("end-session"),
+        refreshSession: document.getElementById("refresh-session"),
+        refreshBoard: document.getElementById("refresh-board"),
+        refreshRentals: document.getElementById("refresh-rentals"),
+        refreshOrders: document.getElementById("refresh-orders"),
+        inventorySummary: document.getElementById("inventory-summary"),
+        rentals: document.getElementById("rentals"),
+        ordersSummary: document.getElementById("orders-summary"),
+        orders: document.getElementById("orders"),
+        logs: document.getElementById("logs")
+      };
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll("\"", "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function formatDate(value) {
+        if (!value) {
+          return "Not set";
+        }
+
+        const date = new Date(value);
+        return new Intl.DateTimeFormat(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short"
+        }).format(date);
+      }
+
+      function formatMoney(value) {
+        return new Intl.NumberFormat(undefined, {
+          style: "currency",
+          currency: "USD"
+        }).format(Number(value));
+      }
+
+      function setNotice(tone, text) {
+        elements.notice.className = "notice " + tone;
+        elements.notice.textContent = text;
+      }
+
+      function logResponse(method, path, status, payload) {
+        state.logs.unshift({
+          id: crypto.randomUUID(),
+          time: new Date().toISOString(),
+          method,
+          path,
+          status,
+          payload
+        });
+        state.logs = state.logs.slice(0, 8);
+        renderLogs();
+      }
+
+      async function api(path, options = {}) {
+        const method = options.method || "GET";
+        const request = {
+          method,
+          credentials: "same-origin",
+          headers: {}
+        };
+
+        if (options.body !== undefined) {
+          request.headers["Content-Type"] = "application/json";
+          request.body = JSON.stringify(options.body);
+        }
+
+        const response = await fetch(path, request);
+        const contentType = response.headers.get("content-type") || "";
+        const payload = contentType.includes("application/json")
+          ? await response.json()
+          : await response.text();
+
+        logResponse(method, path, response.status, payload);
+
+        if (!response.ok) {
+          const message = typeof payload === "object" && payload
+            ? payload.message || JSON.stringify(payload)
+            : String(payload || "Request failed");
+          const error = new Error(message);
+          error.status = response.status;
+          error.payload = payload;
+          throw error;
+        }
+
+        return payload;
+      }
+
+      function renderSession() {
+        if (!state.session) {
+          elements.sessionState.innerHTML = `
+            <span class="status-pill info">No active session</span>
+            <p class="hint" style="margin: 12px 0 0;">
+              Create a session to unlock reservation and order endpoints.
+            </p>
+          `;
+          elements.endSession.disabled = true;
+          return;
+        }
+
+        elements.sessionState.innerHTML = `
+          <span class="status-pill success">Active session</span>
+          <div class="session-grid">
+            <div>
+              <p class="metric-label">User</p>
+              <p class="metric-value">${escapeHtml(state.session.userName)}</p>
+            </div>
+            <div>
+              <p class="metric-label">Session ID</p>
+              <p class="metric-value mono">${escapeHtml(state.session.sessionId)}</p>
+            </div>
+            <div>
+              <p class="metric-label">Created</p>
+              <p class="metric-value">${escapeHtml(formatDate(state.session.createdAt))}</p>
+            </div>
+            <div>
+              <p class="metric-label">Expires</p>
+              <p class="metric-value">${escapeHtml(formatDate(state.session.expiresAt))}</p>
+            </div>
+          </div>
+        `;
+        elements.endSession.disabled = false;
+      }
+
+      function renderRentals() {
+        const availableCount = state.rentals.filter((rental) => rental.status === "AVAILABLE").length;
+        elements.inventorySummary.textContent = state.rentals.length
+          ? availableCount + " of " + state.rentals.length + " rentals are currently available."
+          : "No rentals returned by the API yet.";
+
+        if (!state.rentals.length) {
+          elements.rentals.innerHTML = `
+            <div class="empty-state">
+              <strong>No inventory data yet.</strong>
+              <p>Use Refresh rentals to pull the current inventory snapshot.</p>
+            </div>
+          `;
+          return;
+        }
+
+        elements.rentals.innerHTML = state.rentals.map((rental) => {
+          const statusClass = rental.status.toLowerCase();
+          const reserveDisabled = !state.session || rental.status !== "AVAILABLE";
+          const returnDisabled = !state.session || rental.status !== "RESERVED";
+          return `
+            <article class="rental-card">
+              <div>
+                <div class="rental-meta">
+                  <span class="status-pill ${statusClass}">${escapeHtml(rental.status)}</span>
+                  <span class="status-pill info">${escapeHtml(rental.category)}</span>
+                  <span class="status-pill info">${escapeHtml(formatMoney(rental.hourlyRate))}/hr</span>
+                </div>
+                <h3>${escapeHtml(rental.assetName)}</h3>
+                <p class="mono">${escapeHtml(rental.rentalId)}</p>
+                <p>Updated ${escapeHtml(formatDate(rental.updatedAt))}</p>
+              </div>
+              <div class="action-row">
+                <button
+                  class="button-primary"
+                  type="button"
+                  data-action="reserve"
+                  data-rental-id="${escapeHtml(rental.rentalId)}"
+                  ${reserveDisabled ? "disabled" : ""}
+                >
+                  Reserve
+                </button>
+                <button
+                  class="button-warn"
+                  type="button"
+                  data-action="return"
+                  data-rental-id="${escapeHtml(rental.rentalId)}"
+                  ${returnDisabled ? "disabled" : ""}
+                >
+                  Return
+                </button>
+              </div>
+            </article>
+          `;
+        }).join("");
+      }
+
+      function renderOrders() {
+        if (!state.session) {
+          elements.ordersSummary.textContent = "Create a session to fetch session-bound orders.";
+          elements.orders.innerHTML = `
+            <div class="empty-state">
+              <strong>No session, no ledger.</strong>
+              <p>The orders endpoint only returns data for the active session cookie.</p>
+            </div>
+          `;
+          return;
+        }
+
+        elements.ordersSummary.textContent = state.orders.length
+          ? state.orders.length + " orders are linked to this session."
+          : "This session does not have any orders yet.";
+
+        if (!state.orders.length) {
+          elements.orders.innerHTML = `
+            <div class="empty-state">
+              <strong>No orders yet.</strong>
+              <p>Reserve a rental from the inventory panel to populate the ledger.</p>
+            </div>
+          `;
+          return;
+        }
+
+        elements.orders.innerHTML = state.orders.map((order) => `
+          <article class="order-card">
+            <div class="order-meta">
+              <span class="status-pill ${escapeHtml(order.status.toLowerCase())}">
+                ${escapeHtml(order.status)}
+              </span>
+              <span class="status-pill info">${escapeHtml(order.customerName)}</span>
+            </div>
+            <h3>${escapeHtml(order.assetName)}</h3>
+            <p class="mono">${escapeHtml(order.orderId)}</p>
+            <p>Rental: ${escapeHtml(order.rentalId)}</p>
+            <p>Created ${escapeHtml(formatDate(order.createdAt))}</p>
+            <p>Returned ${escapeHtml(formatDate(order.returnedAt))}</p>
+          </article>
+        `).join("");
+      }
+
+      function renderLogs() {
+        if (!state.logs.length) {
+          elements.logs.innerHTML = `
+            <div class="empty-state">
+              <strong>No responses captured yet.</strong>
+              <p>Board requests will appear here as soon as they complete.</p>
+            </div>
+          `;
+          return;
+        }
+
+        elements.logs.innerHTML = state.logs.map((entry) => {
+          const tone = entry.status >= 500
+            ? "error"
+            : entry.status >= 400
+              ? "warn"
+              : "info";
+          return `
+            <article class="log-entry">
+              <div class="rental-meta">
+                <span class="status-pill ${tone}">${escapeHtml(String(entry.status))}</span>
+                <span class="status-pill info">${escapeHtml(entry.method)}</span>
+                <span class="status-pill info mono">${escapeHtml(entry.path)}</span>
+              </div>
+              <p>
+                <time datetime="${escapeHtml(entry.time)}">${escapeHtml(formatDate(entry.time))}</time>
+              </p>
+              <pre>${escapeHtml(JSON.stringify(entry.payload, null, 2))}</pre>
+            </article>
+          `;
+        }).join("");
+      }
+
+      function handleError(error, fallbackMessage) {
+        if (error && error.status === 401) {
+          state.session = null;
+          state.orders = [];
+          renderSession();
+          renderOrders();
+          setNotice("warn", "The active session is missing or expired. Create a new one to continue.");
+          return;
+        }
+
+        const message = error && error.message ? error.message : fallbackMessage;
+        setNotice("error", fallbackMessage + " " + message);
+      }
+
+      async function loadCurrentSession(silentUnauthorized) {
+        try {
+          state.session = await api("/api/sessions/current");
+        } catch (error) {
+          if (error.status === 401 && silentUnauthorized) {
+            state.session = null;
+            return;
+          }
+          throw error;
+        }
+      }
+
+      async function loadRentals() {
+        state.rentals = await api("/api/rentals");
+      }
+
+      async function loadOrders(silentUnauthorized) {
+        if (!state.session) {
+          state.orders = [];
+          return;
+        }
+
+        try {
+          state.orders = await api("/api/orders");
+        } catch (error) {
+          if (error.status === 401 && silentUnauthorized) {
+            state.session = null;
+            state.orders = [];
+            return;
+          }
+          throw error;
+        }
+      }
+
+      async function refreshBoard() {
+        try {
+          await Promise.all([
+            loadCurrentSession(true),
+            loadRentals()
+          ]);
+          await loadOrders(true);
+          renderSession();
+          renderRentals();
+          renderOrders();
+          setNotice(
+            state.session ? "success" : "info",
+            state.session
+              ? "Board synced for " + state.session.userName + "."
+              : "Inventory loaded. Create a session to continue the scenario."
+          );
+        } catch (error) {
+          handleError(error, "Board refresh failed.");
+        }
+      }
+
+      async function createSession(event) {
+        event.preventDefault();
+        const userName = elements.userName.value.trim();
+        if (!userName) {
+          setNotice("warn", "Enter a user name before creating a session.");
+          return;
+        }
+
+        try {
+          await api("/api/sessions", {
+            method: "POST",
+            body: { userName }
+          });
+          elements.userName.value = "";
+          await loadCurrentSession(false);
+          await Promise.all([
+            loadRentals(),
+            loadOrders(true)
+          ]);
+          renderSession();
+          renderRentals();
+          renderOrders();
+          setNotice("success", "Session created. Reservation endpoints are now unlocked.");
+        } catch (error) {
+          handleError(error, "Could not create a session.");
+        }
+      }
+
+      async function endSession() {
+        try {
+          await api("/api/sessions/current", { method: "DELETE" });
+          state.session = null;
+          state.orders = [];
+          renderSession();
+          renderOrders();
+          await loadRentals();
+          renderRentals();
+          setNotice("info", "Session cleared. The board is back in guest mode.");
+        } catch (error) {
+          handleError(error, "Could not clear the session.");
+        }
+      }
+
+      async function mutateRental(path, rentalId, successMessage) {
+        try {
+          await api(path, {
+            method: "POST",
+            body: { rentalId }
+          });
+          await Promise.all([
+            loadCurrentSession(true),
+            loadRentals()
+          ]);
+          await loadOrders(true);
+          renderSession();
+          renderRentals();
+          renderOrders();
+          setNotice("success", successMessage);
+        } catch (error) {
+          handleError(error, "Rental action failed.");
+        }
+      }
+
+      elements.sessionForm.addEventListener("submit", createSession);
+      elements.refreshBoard.addEventListener("click", refreshBoard);
+      elements.refreshSession.addEventListener("click", async () => {
+        try {
+          await loadCurrentSession(true);
+          renderSession();
+          if (state.session) {
+            setNotice("success", "Current session resolved from the cookie.");
+          } else {
+            setNotice("info", "No active session is currently attached to this browser.");
+          }
+        } catch (error) {
+          handleError(error, "Could not resolve the current session.");
+        }
+      });
+      elements.endSession.addEventListener("click", endSession);
+      elements.refreshRentals.addEventListener("click", async () => {
+        try {
+          await loadRentals();
+          renderRentals();
+          setNotice("info", "Inventory snapshot refreshed.");
+        } catch (error) {
+          handleError(error, "Could not refresh rentals.");
+        }
+      });
+      elements.refreshOrders.addEventListener("click", async () => {
+        try {
+          await loadCurrentSession(true);
+          await loadOrders(true);
+          renderSession();
+          renderOrders();
+          setNotice(
+            state.session ? "info" : "warn",
+            state.session
+              ? "Order ledger refreshed for the current session."
+              : "Create a session before requesting the order ledger."
+          );
+        } catch (error) {
+          handleError(error, "Could not refresh orders.");
+        }
+      });
+
+      elements.rentals.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) {
+          return;
+        }
+
+        const rentalId = button.getAttribute("data-rental-id");
+        const action = button.getAttribute("data-action");
+
+        if (action === "reserve") {
+          mutateRental("/api/orders/reserve", rentalId, "Rental reserved and ledger updated.");
+        } else if (action === "return") {
+          mutateRental("/api/orders/return", rentalId, "Rental returned and inventory reopened.");
+        }
+      });
+
+      renderSession();
+      renderRentals();
+      renderOrders();
+      renderLogs();
+      refreshBoard();
+    </script>
+  </body>
+</html>

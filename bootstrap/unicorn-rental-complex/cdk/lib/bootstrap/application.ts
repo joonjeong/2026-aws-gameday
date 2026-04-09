@@ -1,30 +1,29 @@
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import { resolveAppArtifactPath, resolveAppDirectory, stageSingleFileDirectory } from './paths';
 import { buildResourceName } from './settings';
-import { BootstrapApplicationResources, BootstrapNetworkResources, BootstrapSettings } from './types';
+import {
+  BootstrapApplicationResources,
+  BootstrapNetworkResources,
+  BootstrapSettings,
+  BootstrapSolutionResources,
+} from './types';
 import { createBootstrapUserData } from './user-data';
 
 export function createBootstrapApplication(
   scope: cdk.Stack,
   settings: BootstrapSettings,
   network: BootstrapNetworkResources,
+  solution: BootstrapSolutionResources,
 ): BootstrapApplicationResources {
-  const sessionTableName = buildResourceName(settings, `${settings.projectName}-sessions`);
   const deploymentBucketName = buildResourceName(settings, `${settings.projectName}-artifacts`, {
     label: 'Artifact bucket name',
     maxLength: 63,
   });
-  const albSecurityGroupName = buildResourceName(settings, `${settings.projectName}-alb-sg`);
-  const appSecurityGroupName = buildResourceName(settings, `${settings.projectName}-app-sg`);
-  const databaseSecurityGroupName = buildResourceName(settings, `${settings.projectName}-db-sg`);
   const instanceRoleName = buildResourceName(settings, `${settings.projectName}-ec2-role`, {
     label: 'EC2 instance role name',
     maxLength: 64,
@@ -35,30 +34,8 @@ export function createBootstrapApplication(
     maxLength: 128,
   });
   const autoScalingGroupName = buildResourceName(settings, `${settings.projectName}-asg`);
-  const loadBalancerName = buildResourceName(settings, `${settings.projectName}-alb`, {
-    label: 'Application Load Balancer name',
-    maxLength: 32,
-  });
-  const targetGroupName = buildResourceName(settings, `${settings.projectName}-tg`, {
-    label: 'Target group name',
-    maxLength: 32,
-  });
   const sourceCodePrefix = 'source/app';
   const artifactObjectKey = `artifacts/${settings.artifactFileName}`;
-
-  const sessionTable = new dynamodb.Table(scope, 'SessionTable', {
-    tableName: sessionTableName,
-    partitionKey: {
-      name: 'sessionId',
-      type: dynamodb.AttributeType.STRING,
-    },
-    billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-    timeToLiveAttribute: 'expiresAt',
-    pointInTimeRecoverySpecification: {
-      pointInTimeRecoveryEnabled: true,
-    },
-    removalPolicy: cdk.RemovalPolicy.DESTROY,
-  });
 
   const deploymentBucket = new s3.Bucket(scope, 'ArtifactBucket', {
     bucketName: deploymentBucketName,
@@ -101,74 +78,17 @@ export function createBootstrapApplication(
       iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
     ],
   });
-  sessionTable.grantReadWriteData(instanceRole);
+  solution.sessionTable.grantReadWriteData(instanceRole);
   deploymentBucket.grantRead(instanceRole);
+  const databaseSecret = solution.database.secret;
+  if (!databaseSecret) {
+    throw new Error('Expected the solution stack to expose the generated RDS secret.');
+  }
+  databaseSecret.grantRead(instanceRole);
 
   const keyPair = new ec2.KeyPair(scope, 'ApplicationSshKeyPair', {
     keyPairName,
   });
-
-  const albSecurityGroup = new ec2.SecurityGroup(scope, 'AlbSecurityGroup', {
-    vpc: network.vpc,
-    description: 'Security group for the public ALB',
-    allowAllOutbound: true,
-  });
-  cdk.Tags.of(albSecurityGroup).add('Name', albSecurityGroupName);
-  albSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP');
-
-  const appSecurityGroup = new ec2.SecurityGroup(scope, 'AppSecurityGroup', {
-    vpc: network.vpc,
-    description: 'Security group for the public Spring Boot workload',
-    allowAllOutbound: true,
-  });
-  cdk.Tags.of(appSecurityGroup).add('Name', appSecurityGroupName);
-  appSecurityGroup.addIngressRule(
-    albSecurityGroup,
-    ec2.Port.tcp(8080),
-    'Allow ALB to reach the Java workload',
-  );
-  appSecurityGroup.addIngressRule(
-    ec2.Peer.anyIpv4(),
-    ec2.Port.tcp(22),
-    'Allow SSH from the internet for bootstrap simulation',
-  );
-
-  const databaseSecurityGroup = new ec2.SecurityGroup(scope, 'DatabaseSecurityGroup', {
-    vpc: network.vpc,
-    description: 'Security group for the private Postgres instance',
-    allowAllOutbound: true,
-  });
-  cdk.Tags.of(databaseSecurityGroup).add('Name', databaseSecurityGroupName);
-  databaseSecurityGroup.addIngressRule(
-    appSecurityGroup,
-    ec2.Port.tcp(5432),
-    'Allow app instances to reach Postgres',
-  );
-
-  const database = new rds.DatabaseInstance(scope, 'PostgresDatabase', {
-    databaseName: settings.databaseName,
-    credentials: rds.Credentials.fromGeneratedSecret(settings.databaseUsername),
-    deleteAutomatedBackups: true,
-    deletionProtection: false,
-    engine: rds.DatabaseInstanceEngine.postgres({
-      version: rds.PostgresEngineVersion.VER_16_12,
-    }),
-    instanceType: new ec2.InstanceType(settings.databaseInstanceType),
-    multiAz: false,
-    publiclyAccessible: false,
-    removalPolicy: cdk.RemovalPolicy.DESTROY,
-    securityGroups: [databaseSecurityGroup],
-    storageType: rds.StorageType.GP3,
-    vpc: network.vpc,
-    vpcSubnets: {
-      subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-    },
-  });
-
-  if (!database.secret) {
-    throw new Error('Expected a generated RDS secret for the Postgres database.');
-  }
-  database.secret.grantRead(instanceRole);
 
   const appDirectory = `/opt/${settings.projectName}/app`;
   const serviceName = settings.projectName;
@@ -178,12 +98,12 @@ export function createBootstrapApplication(
     artifactObjectKey,
     artifactFileName: settings.artifactFileName,
     awsRegion: scope.region,
-    databaseEndpointAddress: database.instanceEndpoint.hostname,
+    databaseEndpointAddress: solution.database.instanceEndpoint.hostname,
     databaseName: settings.databaseName,
-    databaseSecretArn: database.secret.secretArn,
+    databaseSecretArn: solution.databaseSecretArn,
     databaseUsername: settings.databaseUsername,
     serviceName,
-    sessionTableName: sessionTable.tableName,
+    sessionTableName: solution.sessionTable.tableName,
     sessionTtlHours: settings.sessionTtlHours,
   });
   const launchTemplate = new ec2.LaunchTemplate(scope, 'ApplicationLaunchTemplate', {
@@ -193,7 +113,7 @@ export function createBootstrapApplication(
     launchTemplateName,
     machineImage: ec2.MachineImage.latestAmazonLinux2023(),
     role: instanceRole,
-    securityGroup: appSecurityGroup,
+    securityGroup: solution.appSecurityGroup,
     userData,
   });
 
@@ -214,52 +134,20 @@ export function createBootstrapApplication(
   });
   asg.node.addDependency(sourceDeployment);
   asg.node.addDependency(artifactDeployment);
-  asg.node.addDependency(database);
+  asg.node.addDependency(solution.database);
 
   asg.scaleOnCpuUtilization('CpuScaling', {
     targetUtilizationPercent: 60,
     estimatedInstanceWarmup: cdk.Duration.minutes(3),
   });
 
-  const loadBalancer = new elbv2.ApplicationLoadBalancer(scope, 'LoadBalancer', {
-    vpc: network.vpc,
-    loadBalancerName,
-    internetFacing: true,
-    securityGroup: albSecurityGroup,
-  });
-
-  const targetGroup = new elbv2.ApplicationTargetGroup(scope, 'TargetGroup', {
-    vpc: network.vpc,
-    targetGroupName,
-    protocol: elbv2.ApplicationProtocol.HTTP,
-    port: 8080,
-    targetType: elbv2.TargetType.INSTANCE,
-    healthCheck: {
-      path: settings.healthCheckPath,
-      healthyHttpCodes: '200-399',
-      interval: cdk.Duration.seconds(30),
-    },
-  });
-
-  asg.attachToApplicationTargetGroup(targetGroup);
-
-  loadBalancer.addListener('HttpListener', {
-    port: 80,
-    protocol: elbv2.ApplicationProtocol.HTTP,
-    defaultTargetGroups: [targetGroup],
-    open: true,
-  });
+  asg.attachToApplicationTargetGroup(solution.targetGroup);
 
   return {
-    sessionTable,
     deploymentBucket,
     instanceRole,
     asg,
-    loadBalancer,
-    targetGroup,
     keyPair,
-    database,
-    databaseSecretArn: database.secret.secretArn,
     artifactObjectKey,
     sourceCodePrefix,
   };

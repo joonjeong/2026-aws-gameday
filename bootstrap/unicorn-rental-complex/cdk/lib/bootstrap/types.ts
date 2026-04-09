@@ -30,16 +30,22 @@ export interface BootstrapNetworkResources {
   allSubnetArns: string[];
 }
 
-export interface BootstrapApplicationResources {
+export interface BootstrapSolutionResources {
+  albSecurityGroup: ec2.SecurityGroup;
+  appSecurityGroup: ec2.SecurityGroup;
+  databaseSecurityGroup: ec2.SecurityGroup;
   sessionTable: dynamodb.Table;
+  loadBalancer: elbv2.ApplicationLoadBalancer;
+  targetGroup: elbv2.ApplicationTargetGroup;
+  database: rds.DatabaseInstance;
+  databaseSecretArn: string;
+}
+
+export interface BootstrapApplicationResources {
   deploymentBucket: s3.Bucket;
   instanceRole: iam.Role;
   asg: autoscaling.AutoScalingGroup;
-  loadBalancer: elbv2.ApplicationLoadBalancer;
-  targetGroup: elbv2.ApplicationTargetGroup;
   keyPair: ec2.KeyPair;
-  database: rds.DatabaseInstance;
-  databaseSecretArn: string;
   artifactObjectKey: string;
   sourceCodePrefix: string;
 }

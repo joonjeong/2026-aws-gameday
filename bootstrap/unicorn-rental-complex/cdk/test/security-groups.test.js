@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const cdk = require('aws-cdk-lib');
 const { UnicornRentalApplicationStack } = require('../dist/lib/stacks/unicorn-rental-application-stack');
+const { UnicornRentalComplexSolutionStack } = require('../dist/lib/stacks/unicorn-rental-solution-stack');
 const { UnicornRentalNetworkStack } = require('../dist/lib/stacks/unicorn-rental-network-stack');
 
 const ARTIFACT_FILE_NAME = 'unicorn-rental-complex-app.jar';
@@ -44,24 +45,32 @@ function createAppResources(app) {
     env,
     settings,
   });
+  const solutionStack = new UnicornRentalComplexSolutionStack(app, 'UnicornRentalComplexSolutionStack', {
+    env,
+    network: networkStack.resources,
+    settings,
+  });
   const applicationStack = new UnicornRentalApplicationStack(app, 'UnicornRentalApplicationStack', {
     env,
     network: networkStack.resources,
+    solution: solutionStack.resources,
     settings,
   });
 
   return {
     networkStack,
+    solutionStack,
     applicationStack,
   };
 }
 
 function synthTemplates() {
   const app = new cdk.App();
-  const { networkStack, applicationStack } = createAppResources(app);
+  const { networkStack, solutionStack, applicationStack } = createAppResources(app);
 
   return {
     network: networkStack._toCloudFormation(),
+    solution: solutionStack._toCloudFormation(),
     application: applicationStack._toCloudFormation(),
   };
 }
@@ -95,7 +104,47 @@ test('network stack exposes both public and private subnet outputs', () => {
   assert.ok(templates.network.Outputs?.PrivateSubnetIds, 'expected private subnet outputs');
 });
 
-test('application stack provisions launch template, postgres, session table, artifact bucket, and deployments', () => {
+test('solution stack provisions the load balancer, postgres, session table, and shared security groups', () => {
+  const templates = synthTemplates();
+
+  assert.ok(
+    findResource(
+      templates.solution,
+      (resource) => resource.Type === 'AWS::ElasticLoadBalancingV2::LoadBalancer',
+    ),
+    'expected a public application load balancer',
+  );
+  assert.ok(
+    findResource(
+      templates.solution,
+      (resource) => resource.Type === 'AWS::RDS::DBInstance',
+    ),
+    'expected a private Postgres instance',
+  );
+  const database = findResource(
+    templates.solution,
+    (resource) => resource.Type === 'AWS::RDS::DBInstance',
+  );
+  assert.equal(database?.Properties?.EngineVersion, '16.12');
+  assert.ok(
+    findResource(
+      templates.solution,
+      (resource) => resource.Type === 'AWS::DynamoDB::Table',
+    ),
+    'expected a DynamoDB session table',
+  );
+  assert.ok(
+    findResource(
+      templates.solution,
+      (resource) =>
+        resource.Type === 'AWS::EC2::SecurityGroup'
+        && resource.Properties?.GroupDescription === 'Security group for the public Spring Boot workload',
+    ),
+    'expected a shared application security group in the solution stack',
+  );
+});
+
+test('application stack provisions launch template, artifact bucket, and deployments without duplicating solution resources', () => {
   const templates = synthTemplates();
 
   assert.ok(
@@ -104,25 +153,6 @@ test('application stack provisions launch template, postgres, session table, art
       (resource) => resource.Type === 'AWS::EC2::LaunchTemplate',
     ),
     'expected a launch template for the autoscaling group',
-  );
-  assert.ok(
-    findResource(
-      templates.application,
-      (resource) => resource.Type === 'AWS::RDS::DBInstance',
-    ),
-    'expected a private Postgres instance',
-  );
-  const database = findResource(
-    templates.application,
-    (resource) => resource.Type === 'AWS::RDS::DBInstance',
-  );
-  assert.equal(database?.Properties?.EngineVersion, '16.12');
-  assert.ok(
-    findResource(
-      templates.application,
-      (resource) => resource.Type === 'AWS::DynamoDB::Table',
-    ),
-    'expected a DynamoDB session table',
   );
   assert.ok(
     findResource(
@@ -137,6 +167,27 @@ test('application stack provisions launch template, postgres, session table, art
       (resource) => resource.Type === 'Custom::CDKBucketDeployment',
     ),
     2,
+  );
+  assert.equal(
+    countResources(
+      templates.application,
+      (resource) => resource.Type === 'AWS::DynamoDB::Table',
+    ),
+    0,
+  );
+  assert.equal(
+    countResources(
+      templates.application,
+      (resource) => resource.Type === 'AWS::RDS::DBInstance',
+    ),
+    0,
+  );
+  assert.equal(
+    countResources(
+      templates.application,
+      (resource) => resource.Type === 'AWS::ElasticLoadBalancingV2::LoadBalancer',
+    ),
+    0,
   );
 });
 
@@ -157,7 +208,7 @@ test('bootstrap security groups preserve public ALB, public app, and private dat
   const templates = synthTemplates();
 
   const albSecurityGroup = findResource(
-    templates.application,
+    templates.solution,
     (resource) =>
       resource.Type === 'AWS::EC2::SecurityGroup'
       && resource.Properties?.GroupDescription === 'Security group for the public ALB',
@@ -174,7 +225,7 @@ test('bootstrap security groups preserve public ALB, public app, and private dat
   ]);
 
   const appSecurityGroup = findResource(
-    templates.application,
+    templates.solution,
     (resource) =>
       resource.Type === 'AWS::EC2::SecurityGroup'
       && resource.Properties?.GroupDescription === 'Security group for the public Spring Boot workload',
@@ -191,7 +242,7 @@ test('bootstrap security groups preserve public ALB, public app, and private dat
   ]);
 
   const albToAppIngressRule = findResource(
-    templates.application,
+    templates.solution,
     (resource) =>
       resource.Type === 'AWS::EC2::SecurityGroupIngress'
       && resource.Properties?.Description === 'Allow ALB to reach the Java workload'
@@ -202,7 +253,7 @@ test('bootstrap security groups preserve public ALB, public app, and private dat
   assert.ok(albToAppIngressRule, 'expected an ALB-to-application ingress rule');
 
   const appToDatabaseIngressRule = findResource(
-    templates.application,
+    templates.solution,
     (resource) =>
       resource.Type === 'AWS::EC2::SecurityGroupIngress'
       && resource.Properties?.Description === 'Allow app instances to reach Postgres'
@@ -252,12 +303,24 @@ test('bootstrap templates install jq and read Secrets Manager before starting th
   assert.match(serviceEnv, /^SESSION_TABLE_NAME=\{\{SESSION_TABLE_NAME\}\}$/m);
 });
 
-test('application outputs expose the database, bucket, and SSM key metadata but not private key material', () => {
+test('solution outputs expose the load balancer and database metadata', () => {
   const templates = synthTemplates();
 
-  assert.ok(templates.application.Outputs?.DatabaseEndpointAddress);
+  assert.ok(templates.solution.Outputs?.LoadBalancerDnsName);
+  assert.ok(templates.solution.Outputs?.TargetGroupArn);
+  assert.ok(templates.solution.Outputs?.DatabaseEndpointAddress);
+  assert.ok(templates.solution.Outputs?.DatabaseSecretArn);
+  assert.ok(templates.solution.Outputs?.SessionTableName);
+});
+
+test('application outputs expose the bucket and SSM key metadata but not private key material', () => {
+  const templates = synthTemplates();
+
   assert.ok(templates.application.Outputs?.ArtifactBucketName);
   assert.ok(templates.application.Outputs?.ArtifactObjectKey);
   assert.ok(templates.application.Outputs?.Ec2PrivateKeyParameterName);
+  assert.equal(templates.application.Outputs?.SessionTableName, undefined);
+  assert.equal(templates.application.Outputs?.DatabaseEndpointAddress, undefined);
+  assert.equal(templates.application.Outputs?.DatabaseSecretArn, undefined);
   assert.equal(templates.application.Outputs?.Ec2PrivateKeyMaterial, undefined);
 });

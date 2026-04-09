@@ -2,11 +2,17 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { createBootstrapApplication } from '../bootstrap/application';
 import { applyBootstrapTags } from '../bootstrap/settings';
-import { BootstrapApplicationResources, BootstrapNetworkResources, BootstrapSettings } from '../bootstrap/types';
+import {
+  BootstrapApplicationResources,
+  BootstrapNetworkResources,
+  BootstrapSettings,
+  BootstrapSolutionResources,
+} from '../bootstrap/types';
 
 interface UnicornRentalApplicationStackProps extends cdk.StackProps {
   network: BootstrapNetworkResources;
   settings: BootstrapSettings;
+  solution: BootstrapSolutionResources;
 }
 
 export class UnicornRentalApplicationStack extends cdk.Stack {
@@ -20,26 +26,12 @@ export class UnicornRentalApplicationStack extends cdk.Stack {
       this,
       props.settings,
       props.network,
+      props.solution,
     );
-
-    new cdk.CfnOutput(this, 'LoadBalancerDnsName', {
-      value: this.resources.loadBalancer.loadBalancerDnsName,
-      description: 'Public ALB DNS name for the Spring Boot workload',
-    });
-
-    new cdk.CfnOutput(this, 'TargetGroupArn', {
-      value: this.resources.targetGroup.targetGroupArn,
-      description: 'Initial target group ARN',
-    });
 
     new cdk.CfnOutput(this, 'AutoScalingGroupName', {
       value: this.resources.asg.autoScalingGroupName,
       description: 'Initial Auto Scaling Group name',
-    });
-
-    new cdk.CfnOutput(this, 'SessionTableName', {
-      value: this.resources.sessionTable.tableName,
-      description: 'DynamoDB table name for user sessions',
     });
 
     new cdk.CfnOutput(this, 'ArtifactBucketName', {
@@ -55,16 +47,6 @@ export class UnicornRentalApplicationStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'SourceCodePrefix', {
       value: this.resources.sourceCodePrefix,
       description: 'S3 prefix that stores the uploaded application source tree',
-    });
-
-    new cdk.CfnOutput(this, 'DatabaseEndpointAddress', {
-      value: this.resources.database.instanceEndpoint.hostname,
-      description: 'Private Postgres endpoint for the Spring Boot app',
-    });
-
-    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
-      value: this.resources.databaseSecretArn,
-      description: 'Secrets Manager ARN that stores the generated Postgres credentials',
     });
 
     new cdk.CfnOutput(this, 'InstanceRoleArn', {

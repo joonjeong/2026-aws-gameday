@@ -2,6 +2,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { buildStackName, loadBootstrapSettings } from '../lib/bootstrap/settings';
 import { UnicornRentalApplicationStack } from '../lib/stacks/unicorn-rental-application-stack';
+import { UnicornRentalComplexSolutionStack } from '../lib/stacks/unicorn-rental-solution-stack';
 import { UnicornRentalNetworkStack } from '../lib/stacks/unicorn-rental-network-stack';
 
 const app = new cdk.App();
@@ -18,12 +19,21 @@ const networkStack = new UnicornRentalNetworkStack(app, 'UnicornRentalComplexNet
   description: 'Dedicated GameDay VPC with public app and private database subnets',
 });
 
-new UnicornRentalApplicationStack(app, 'UnicornRentalComplexApplicationStack', {
+const solutionStack = new UnicornRentalComplexSolutionStack(app, 'UnicornRentalComplexSolutionStack', {
   env,
   network: networkStack.resources,
   settings,
+  stackName: buildStackName(settings, 'UnicornRentalComplexSolutionStack'),
+  description: 'Application Load Balancer, Postgres, and shared security groups for the Spring Boot workload',
+});
+
+new UnicornRentalApplicationStack(app, 'UnicornRentalComplexApplicationStack', {
+  env,
+  network: networkStack.resources,
+  solution: solutionStack.resources,
+  settings,
   stackName: buildStackName(settings, 'UnicornRentalComplexApplicationStack'),
-  description: 'Spring Boot app, Postgres, DynamoDB sessions, and S3 artifact bootstrap resources',
+  description: 'Spring Boot app and S3 artifact bootstrap resources',
 });
 
 app.synth();
